@@ -8,7 +8,7 @@
 #import "Themes.h"
 #import "Utils.h"
 
-static NSString *const kBlockedString = @"MCc0JywlJw==";
+static NSString *const kBlockedString = @"MCc0JywlJwA==";
 
 static NSURL         *source;
 static NSString      *bunnyPatchesBundlePath;
