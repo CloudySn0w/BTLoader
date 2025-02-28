@@ -135,7 +135,7 @@ jobs:
         run: |
           echo "Checking DEB files in:"
           ls -la BoundTweak/
-          echo "DEB files found: $(find BunnyTweak -name "*.deb" | wc -l)"
+          echo "DEB files found: $(find BoundTweak -name "*.deb" | wc -l)"
 
       - name: Download Discord IPA
         run: |
@@ -154,7 +154,7 @@ jobs:
           
       - name: Download IPA icons
         run: |
-          curl -L -o logo.png https://github.com/CloudySnowX/BoundTweak/blob/main/assets/logo/logo.png
+          curl -L -o icon.png https://github.com/CloudySnowX/BoundTweak/blob/main/assets/logo/icon.png
 
       - name: Extract Values
         run: |
