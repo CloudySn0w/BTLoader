@@ -154,7 +154,7 @@ jobs:
           
       - name: Download IPA icons
         run: |
-          curl -L -o "https://raw.githubusercontent.com/CloudySnowX/BoundTweak/main/assets/logo/icon.png"
+          curl -L -o icon.png https://raw.githubusercontent.com/CloudySnowX/BoundTweak/main/assets/logo/icon.png
 
       - name: Extract Values
         run: |
