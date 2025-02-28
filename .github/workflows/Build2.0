@@ -115,7 +115,7 @@ jobs:
       - name: Upload rootless package
         uses: actions/upload-artifact@v4
         with:
-          name: BunnyTweak
+          name: BoundTweak
           path: ${{ env.ROOTLESS_DEB_PATH }}
 
   build-ipa:
@@ -125,16 +125,16 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Download BunnyTweak
+      - name: Download BoundTweak
         uses: actions/download-artifact@v4
         with:
-          name: BunnyTweak
-          path: BunnyTweak
+          name: BoundTweak
+          path: BoundTweak
 
       - name: Verify DEB File
         run: |
           echo "Checking DEB files in:"
-          ls -la BunnyTweak/
+          ls -la BoundTweak/
           echo "DEB files found: $(find BunnyTweak -name "*.deb" | wc -l)"
 
       - name: Download Discord IPA
@@ -154,14 +154,13 @@ jobs:
           
       - name: Download IPA icons
         run: |
-          curl -L -o ipa-icons.zip https://raw.githubusercontent.com/pyoncord/assets/main/ipa-icons.zip
-          unzip ipa-icons.zip
+          curl -L -o logo.png https://github.com/CloudySnowX/BoundTweak/blob/main/assets/logo/logo.png
 
       - name: Extract Values
         run: |
           PACKAGE=$(grep '^Package:' control | cut -d ' ' -f 2)
           VERSION=$(grep '^Version:' control | cut -d ' ' -f 2)
-          echo "APP_NAME=CumCord" >> $GITHUB_ENV
+          echo "APP_NAME=Bound" >> $GITHUB_ENV
 
       - name: Install cyan
         run: pip install --force-reinstall https://github.com/asdfzxcvbn/pyzule-rw/archive/main.zip Pillow
@@ -169,21 +168,21 @@ jobs:
       - name: Download DiscordNoTrack
         run: wget https://github.com/asdfzxcvbn/DiscordNoTrack/releases/latest/download/DiscordNoTrack.dylib
 
-      - name: Inject tweak - Revenge + DiscordNoTrack
+      - name: Inject tweak - OpenInDiscord + DiscordNoTrack
         run: |
-          DEB_FILE=$(find BunnyTweak -name "*.deb")
+          DEB_FILE=$(find BoundTweak -name "*.deb")
           cyan -n "${{ env.APP_NAME }}" \
-            -k PyoncordIcon60x60@2x.png \
+            -k logo.png \
             -d -i Payload/Discord.app \
             -o "${{ github.workspace }}/${{ env.APP_NAME }}-NoTrackRC1.ipa" \
             -f "$DEB_FILE" \
             "${{ github.workspace }}/DiscordNoTrack.dylib" \
             -usg
 
-      - name: Upload ipa-discordnotrack as artifact
+      - name: Upload The Ipa as artifact
         uses: actions/upload-artifact@v4
         with:
-          name: CumCord-NoTrackRC1
+          name: Bound-NoTrackRC1
           path: ${{ github.workspace }}/${{ env.APP_NAME }}-NoTrackRC1.ipa
 
   release-app:
@@ -215,7 +214,7 @@ jobs:
 
       - name: Extract Discord Version
         run: |
-          unzip -q CumCord-NoTrackRC1.ipa
+          unzip -q Bound-NoTrackRC1.ipa
           VERSION=$(plutil -p Payload/Discord.app/Info.plist | grep CFBundleShortVersionString | cut -d '"' -f 4)
           
           if [[ "${{ github.event.inputs.is_testflight || inputs.is_testflight }}" == "true" ]]; then
@@ -235,7 +234,7 @@ jobs:
           tag_name: v${{ env.DISCORD_VERSION }}
           files: |
             ${{ env.ROOTLESS_DEB_FILE_NAME }}
-            CumCord-NoTrackRC1.ipa
+            Bound-NoTrackRC1.ipa
           generate_release_notes: true
           prerelease: ${{ env.IS_PRERELEASE }}
           fail_on_unmatched_files: true
