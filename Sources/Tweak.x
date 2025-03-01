@@ -59,34 +59,6 @@ id                    gBridge        = nil;
     NSURL *bundleUrl;
     if (loaderConfig.customLoadUrlEnabled && loaderConfig.customLoadUrl)
     {
-        NSString *urlString = loaderConfig.customLoadUrl.absoluteString.lowercaseString;
-        if ([urlString containsString:decryptString(kBlockedString)])
-        {
-            dispatch_async(dispatch_get_main_queue(), ^{
-                UIViewController *rootVC =
-                    [UIApplication sharedApplication].windows.firstObject.rootViewController;
-                handleBadBundleAttempt(rootVC);
-            });
-            return %orig;
-        }
-
-        NSData *existingBundle = [NSData
-            dataWithContentsOfURL:[pyoncordDirectory URLByAppendingPathComponent:@"bundle.js"]];
-        if (existingBundle)
-        {
-            NSString *bundleContent = [[NSString alloc] initWithData:existingBundle
-                                                            encoding:NSUTF8StringEncoding];
-            if ([bundleContent.lowercaseString containsString:decryptString(kBlockedString)])
-            {
-                dispatch_async(dispatch_get_main_queue(), ^{
-                    UIViewController *rootVC =
-                        [UIApplication sharedApplication].windows.firstObject.rootViewController;
-                    handleBadBundleAttempt(rootVC);
-                });
-                return %orig;
-            }
-        }
-
         bundleUrl = loaderConfig.customLoadUrl;
         BunnyLog(@"Using custom load URL: %@", bundleUrl.absoluteString);
     }
