@@ -22,6 +22,3 @@ void        removeCachedBundle(void);
 void        gracefulExit(UIViewController *presenter);
 void        deletePluginsAndReload(UIViewController *presenter);
 void        deleteThemesAndReload(UIViewController *presenter);
-void        handleBadBundleAttempt(UIViewController *presenter);
-
-NSString *decryptString(NSString *encrypted);
