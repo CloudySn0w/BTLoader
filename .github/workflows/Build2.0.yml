@@ -233,9 +233,9 @@ jobs:
         with:
           tag_name: v${{ env.DISCORD_VERSION }}
           files: |
-            ${{ env.ROOTLESS_DEB_FILE_NAME }}
             Bound-NoTrackRC1.ipa
-          generate_release_notes: true
+          body: "Download the latest version here. Comes preinjected with NoTrack and OpenInDiscord"
+          generate_release_notes: false
           prerelease: ${{ env.IS_PRERELEASE }}
           fail_on_unmatched_files: true
           token: ${{ env.GH_TOKEN }}
