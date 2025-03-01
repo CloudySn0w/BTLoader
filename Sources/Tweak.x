@@ -8,8 +8,6 @@
 #import "Themes.h"
 #import "Utils.h"
 
-static NSString *const kBlockedString = @"MCc0JywlJwA==";
-
 static NSURL         *source;
 static NSString      *bunnyPatchesBundlePath;
 static NSURL         *pyoncordDirectory;
