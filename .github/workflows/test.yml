@@ -1,0 +1,299 @@
+name: Deploy Build
+run-name: ${{ github.event.inputs.release == 'true' && 'Release' || 'Build' }} for ${{ github.event.inputs.ipa_url }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      ipa_url:
+        default: ""
+        description: "Direct link to the decrypted IPA"
+        required: true
+        type: string
+      release:
+        description: "Release the build"
+        required: true
+        type: boolean
+      is_testflight:
+        default: false
+        description: "TestFlight build"
+        required: true
+        type: boolean
+      caller_workflow:
+        default: ""
+        description: "Caller workflow name"
+        required: false
+        type: string
+      release_name:
+        description: "Custom release name"
+        required: false
+        type: string
+        default: ""
+      tag_name:
+        description: "Custom tag name (defaults to vDISCORD_VERSION)"
+        required: false
+        type: string
+        default: ""
+      release_body:
+        description: "Custom release description"
+        required: false
+        type: string
+        default: "Download the latest version here. Comes preinjected with NoTrack and OpenInDiscord"
+      prerelease:
+        description: "Force prerelease status (overrides auto-detection)"
+        required: false
+        type: boolean
+        default: false
+      draft:
+        description: "Publish as draft release"
+        required: false
+        type: boolean
+        default: false
+      discussion_category_name:
+        description: "Category for release discussions"
+        required: false
+        type: string
+        default: ""
+
+  workflow_call:
+    inputs:
+      ipa_url:
+        required: true
+        type: string
+      is_testflight:
+        required: true
+        type: boolean
+      release:
+        required: false
+        type: boolean
+        default: true
+      caller_workflow:
+        required: false
+        type: string
+      release_name:
+        required: false
+        type: string
+        default: ""
+      tag_name:
+        required: false
+        type: string
+        default: ""
+      release_body:
+        required: false
+        type: string
+        default: "Download the latest version here. Comes preinjected with NoTrack and OpenInDiscord"
+      prerelease:
+        required: false
+        type: boolean
+        default: false
+      draft:
+        required: false
+        type: boolean
+        default: false
+      discussion_category_name:
+        required: false
+        type: string
+        default: ""
+
+env:
+  GH_TOKEN: ${{ github.token }}
+
+jobs:
+  build-tweak:
+    runs-on: macos-15
+    env:
+      DEB_DOWNLOADED: false
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          submodules: true
+
+      - name: Download Tweak
+        if: inputs.caller_workflow != 'ci'
+        run: |
+          set +e
+          release_info=$(gh api --header 'Accept: application/vnd.github+json' repos/${{ github.repository }}/releases/latest)
+          exit_code=$?
+          if [ $exit_code -ne 0 ]; then
+            echo "Failed to fetch latest release. Exit code: $exit_code"
+            echo "DEB_DOWNLOADED=false" >> $GITHUB_ENV
+            exit 0
+          fi
+          set -e
+
+          release_version=$(echo "$release_info" | jq -r '.assets[] | select(.name | contains("iphoneos-arm64.deb")) | .name' | grep -o '_[0-9.]\+_' | tr -d '_')
+          control_version=$(grep '^Version:' control | cut -d ' ' -f 2)
+
+          if [ "$release_version" = "$control_version" ]; then
+            echo "Versions match. Downloading DEB files..."
+            echo "$release_info" | jq -r '.assets[] | select(.name | endswith("arm64.deb")) | .browser_download_url' | xargs -I {} curl -L -O {}
+            echo "DEB_DOWNLOADED=true" >> $GITHUB_ENV
+          else
+            echo "Versions do not match. No files will be downloaded."
+            echo "DEB_DOWNLOADED=false" >> $GITHUB_ENV
+            exit 0
+          fi
+
+      - name: Check cache
+        if: env.DEB_DOWNLOADED == 'false'
+        run: echo upstream_heads=`git ls-remote https://github.com/theos/theos | head -n 1 | cut -f 1`-`git ls-remote https://github.com/theos/sdks | head -n 1 | cut -f 1` >> $GITHUB_ENV
+
+      - name: Use cache
+        if: env.DEB_DOWNLOADED == 'false'
+        id: cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ github.workspace }}/theos
+          key: ${{ runner.os }}-${{ env.upstream_heads }}
+
+      - name: Prepare Theos
+        if: env.DEB_DOWNLOADED == 'false'
+        uses: Randomblock1/theos-action@v1
+
+      - name: Set GNU Make path
+        run: |
+          echo "PATH=$(brew --prefix make)/libexec/gnubin:$PATH" >> $GITHUB_ENV
+
+      - name: Build packages
+        if: env.DEB_DOWNLOADED == 'false'
+        run: make package
+
+      - name: Set DEB path
+        run: |
+          if [ "${{ env.DEB_DOWNLOADED }}" == "true" ]; then
+            echo "ROOTLESS_DEB_PATH=*-arm64.deb" >> $GITHUB_ENV
+          else
+            echo "ROOTLESS_DEB_PATH=packages/*-arm64.deb" >> $GITHUB_ENV
+          fi
+
+      - name: Upload rootless package
+        uses: actions/upload-artifact@v4
+        with:
+          name: BoundTweak
+          path: ${{ env.ROOTLESS_DEB_PATH }}
+
+  build-ipa:
+    needs: build-tweak
+    runs-on: macos-14
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download BoundTweak
+        uses: actions/download-artifact@v4
+        with:
+          name: BoundTweak
+          path: BoundTweak
+
+      - name: Verify DEB File
+        run: |
+          echo "Checking DEB files in:"
+          ls -la BoundTweak/
+          echo "DEB files found: $(find BoundTweak -name "*.deb" | wc -l)"
+
+      - name: Download Discord IPA
+        run: |
+          curl -L -o discord.ipa "${{ github.event.inputs.ipa_url || inputs.ipa_url }}"
+          
+      - name: Download OpenInDiscord
+        run: |
+          wget https://raw.githubusercontent.com/daisuke1227/RevengeUpdates/refs/heads/main/OpenDiscordSafariExtension.zip
+          unzip -q OpenDiscordSafariExtension.zip
+
+      - name: Add OpenInDiscord
+        run: |
+          unzip -q discord.ipa
+          mkdir -p Payload/Discord.app/Plugins/
+          cp -r OpenDiscordSafariExtension.appex Payload/Discord.app/Plugins/
+          
+      - name: Download IPA icons
+        run: |
+          curl -L -o icon.png "https://raw.githubusercontent.com/CloudySnowX/BoundTweak/main/assets/logo/icon.png"
+
+      - name: Extract Values
+        run: |
+          PACKAGE=$(grep '^Package:' control | cut -d ' ' -f 2)
+          VERSION=$(grep '^Version:' control | cut -d ' ' -f 2)
+          echo "APP_NAME=Bound" >> $GITHUB_ENV
+
+      - name: Install cyan
+        run: pip install --force-reinstall https://github.com/asdfzxcvbn/pyzule-rw/archive/main.zip Pillow
+
+      - name: Download DiscordNoTrack
+        run: wget https://github.com/asdfzxcvbn/DiscordNoTrack/releases/latest/download/DiscordNoTrack.dylib
+
+      - name: Inject tweak - OpenInDiscord + DiscordNoTrack
+        run: |
+          DEB_FILE=$(find BoundTweak -name "*.deb")
+          cyan -n "${{ env.APP_NAME }}" \
+            -k icon.png \
+            -d -i Payload/Discord.app \
+            -o "${{ github.workspace }}/${{ env.APP_NAME }}-NoTrackRC1.ipa" \
+            -f "$DEB_FILE" \
+            "${{ github.workspace }}/DiscordNoTrack.dylib" \
+            -usg
+
+      - name: Upload The Ipa as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Bound-NoTrackRC1
+          path: ${{ github.workspace }}/${{ env.APP_NAME }}-NoTrackRC1.ipa
+
+  release-app:
+    if: |
+      inputs.caller_workflow != 'ci' && 
+      (github.event.inputs.release == 'true' || inputs.release == true)
+    runs-on: macos-15
+    needs: build-ipa
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Extract Values
+        run: |
+          NAME=$(grep '^Name:' control | cut -d ' ' -f 2)
+          PACKAGE=$(grep '^Package:' control | cut -d ' ' -f 2)
+          VERSION=$(grep '^Version:' control | cut -d ' ' -f 2)
+          ROOTLESS_DEB_FILE_NAME="${PACKAGE}_${VERSION}_iphoneos-arm64.deb"
+          echo "ROOTLESS_DEB_FILE_NAME=$ROOTLESS_DEB_FILE_NAME" >> $GITHUB_ENV
+          echo "APP_NAME=$NAME" >> $GITHUB_ENV
+
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          merge-multiple: true
+
+      - name: Extract Discord Version
+        run: |
+          unzip -q Bound-NoTrackRC1.ipa
+          VERSION=$(plutil -p Payload/Discord.app/Info.plist | grep CFBundleShortVersionString | cut -d '"' -f 4)
+          
+          if [[ "${{ github.event.inputs.is_testflight || inputs.is_testflight }}" == "true" ]]; then
+            BUILD=$(plutil -p Payload/Discord.app/Info.plist | grep CFBundleVersion | cut -d '"' -f 4)
+            VERSION="${VERSION}_${BUILD}"
+            echo "IS_PRERELEASE=true" >> $GITHUB_ENV
+          else
+            echo "IS_PRERELEASE=false" >> $GITHUB_ENV
+          fi
+          
+          echo "DISCORD_VERSION=$VERSION" >> $GITHUB_ENV
+
+      - name: Create GitHub Release
+        id: create_release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.event.inputs.tag_name || inputs.tag_name || format('v{0}', env.DISCORD_VERSION) }}
+          name: ${{ github.event.inputs.release_name || inputs.release_name || format('{0} v{1}', env.APP_NAME, env.DISCORD_VERSION) }}
+          body: ${{ github.event.inputs.release_body || inputs.release_body }}
+          files: |
+            Bound-NoTrackRC1.ipa
+          generate_release_notes: false
+          prerelease: ${{ github.event.inputs.prerelease || inputs.prerelease || env.IS_PRERELEASE == 'true' }}
+          draft: ${{ github.event.inputs.draft || inputs.draft }}
+          discussion_category_name: ${{ github.event.inputs.discussion_category_name || inputs.discussion_category_name }}
+          fail_on_unmatched_files: true
+          token: ${{ env.GH_TOKEN }}
