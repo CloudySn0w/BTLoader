@@ -37,7 +37,7 @@ on:
         description: "Custom release description"
         required: false
         type: string
-        default: "Download the latest version here. Comes preinjected with NoTrack and OpenInDiscord"
+        default: "Download the latest stable version here. Coming preinjected with DiscordNoTrack and OpenInDiscord"
       prerelease:
         description: "Force prerelease status (overrides auto-detection)"
         required: false
@@ -80,7 +80,7 @@ on:
       release_body:
         required: false
         type: string
-        default: "Download the latest version here. Comes preinjected with NoTrack and OpenInDiscord"
+        default: "Download the latest stable version here. Coming preinjected with DiscordNoTrack and OpenInDiscord"
       prerelease:
         required: false
         type: boolean
