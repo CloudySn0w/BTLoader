@@ -6,7 +6,7 @@ FINALPACKAGE = 1
 
 include $(THEOS)/makefiles/common.mk
 
-TWEAK_NAME = BoundTweak
+TWEAK_NAME = Bunny
 BUNDLE_NAME = BunnyResources
 
 Bunny_FILES = $(wildcard Sources/*.x Sources/*.m Sources/**/*.x Sources/**/*.m)
