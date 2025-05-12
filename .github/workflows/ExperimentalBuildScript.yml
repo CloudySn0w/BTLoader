@@ -211,7 +211,7 @@ jobs:
 
       - name: Add OpenInDiscord
         run: |
-          unzip -q discord.ipa
+          unzip -o -q discord.ipa
           mkdir -p Payload/Discord.app/Plugins/
           cp -r OpenDiscordSafariExtension.appex Payload/Discord.app/Plugins/
           
