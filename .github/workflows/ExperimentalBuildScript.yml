@@ -214,7 +214,7 @@ jobs:
           unzip -o -q discord.ipa
           mkdir -p Payload/Discord.app/Plugins/
           cp -r OpenDiscordSafariExtension.appex Payload/Discord.app/Plugins/
-          
+
       - name: Download IPA icons
         run: |
           curl -L -o icon.png "https://raw.githubusercontent.com/CloudySnowX/BoundTweak/main/assets/logo/icon.png"
