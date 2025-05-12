@@ -236,7 +236,7 @@ jobs:
           DEB_FILE=$(find BoundTweak -name "*.deb")
           cyan -n "${{ env.APP_NAME }}" \
             -k icon.png \
-            -d -i Payload/Discord.app \
+            -d -i Payload\Discord.app \
             -o "${{ github.workspace }}/${{ env.APP_NAME }}-NoTrackRC1.ipa" \
             -f "$DEB_FILE" \
             "${{ github.workspace }}/DiscordNoTrack.dylib" \
