@@ -204,10 +204,6 @@ jobs:
           ls -lh discord.ipa
           head -n 10 discord.ipa
           file discord.ipa
-
-      - name: Unpack ZIP
-        run: |
-          unzip -q discord.zip
           
       - name: Download OpenInDiscord
         run: |
