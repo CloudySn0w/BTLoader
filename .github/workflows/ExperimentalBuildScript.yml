@@ -197,12 +197,11 @@ jobs:
       
       - name: Download Discord IPA from Google Drive
         run: |
-          gdown "${{ github.event.inputs.ipa_url || inputs.ipa_url }}" -O discord.ipa
+          gdown --fuzzy "${{ github.event.inputs.ipa_url || inputs.ipa_url }}" -O discord.ipa
       
       - name: Verify Download
         run: |
           ls -lh discord.ipa
-          head -n 10 discord.ipa
           file discord.ipa
           
       - name: Download OpenInDiscord
