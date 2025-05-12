@@ -170,16 +170,3 @@ that is not confusingly similar to the notice in this License; and (iii) You
 may not claim that your original works are open source software unless your
 Modified License has been approved by Open Source Initiative (OSI) and You
 comply with its license review and certification process.
-
-Amendment for Substantial Changes Requirement
-
-Effective Starting From Commit: c568969333ae20bbbb6e924f6404e4f02fb65fd7
-
-Any forks, derivative works, or redistributions of this project starting from commit c568969333ae20bbbb6e924f6404e4f02fb65fd7 must meet the following requirement:
-
-Substantial Changes: The resulting work must include substantial changes, defined as:
-
-- Modifications affecting at least 30% of the codebase, or
-- Addition of significant new features that materially enhance the software's functionality.
-
-Redistribution without meeting this criterion is prohibited from this commit onward. This requirement does not apply to versions based on commits before c568969333ae20bbbb6e924f6404e4f02fb65fd7.
