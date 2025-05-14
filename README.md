@@ -1,5 +1,9 @@
 # Welcome To BoundTweak
 
+**-----**
+*After you read whats below I suggest you look into [The Future Of BoundTweak](TheFutureOfBT.md)
+**-----**
+
 The Castdrian Story.
 
 When BunnyTweak’s new maintainer, GitHub user Castdrian, took the reins of the Bunny loader for iOS named BunnyTweak, the community expected fresh features and transparent stewardship. Instead, what unfolded was a cascade of questionable maneuvers—each more alarming than the last:
