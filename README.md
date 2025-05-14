@@ -14,7 +14,7 @@ When BunnyTweak’s new maintainer, GitHub user Castdrian, took the reins of the
 
 3. Community Intimidation Tactics: Many users who dared question the changes of the OSS license were met with terse “take it or leave it” responses, or outright dismissed.
 
-4. Legal Bluster Overreach: With no legal standing, Castdrian threatened potential forkers with “breach of license” notices. He claimed rights over code that was open source and dismissed any critique and forks as “unauthorized modification.” It was a bluff—but one that succeeded in muzzling many would-be collaborators.
+4. Legal Overreach: With no legal standing, Castdrian threatened potential forkers with “breach of license” notices. He claimed rights over code that was open source and dismissed any critique and forks as “unauthorized modification.” It was a bluff—but one that succeeded in muzzling many would-be collaborators.
 
 ***Why BoundTweak Exists***
 
