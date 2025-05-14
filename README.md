@@ -1,7 +1,7 @@
 # Welcome To BoundTweak
 
 **-----**
-*After you read whats below I suggest you look into [The Future Of BoundTweak](TheFutureOfBT.md)
+*After you read whats below I suggest you look into* [The Future Of BoundTweak](TheFutureOfBT.md)
 **-----**
 
 The Castdrian Story.
