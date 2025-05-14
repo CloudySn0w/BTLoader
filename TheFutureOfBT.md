@@ -2,6 +2,7 @@
 
 BoundTweak was never meant to be **just** Revenge. It was meant to be a shot at redemption.
 Now that we're free I'm absolutely open for suggestions regarding this project. There has admittedly been some talks with PalmDevs regarding the possibility of expanding this loader to work with Revenge Next.
+
 I want to make it very VERY clear that I know barely ANY coding whatsoever. So if you want to help this along your always welcome to talk to me on the [**Revenge discord server.**](https://discord.com/invite/ddcQf3s2Uq)
 
 I feel as though some honorable mentions are needed here because without them I would've never made this work. 
