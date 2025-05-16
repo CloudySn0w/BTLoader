@@ -10,7 +10,7 @@ When BunnyTweak’s new maintainer, GitHub user Castdrian, took the reins of the
 
 1. Unauthorized License Hijack: Under the guise of “clarifying usage,” Castdrian grafted onto the repository a heavily “customized” OSS license that no open-source authority recognizes. By unilaterally appending retroactive restrictions, he tried to force every downstream user to jump through arbitrary legal hoops—an outright violation of standard licensing norms.
 
-2. Malicious Pop-Up Insertion: Mid-update to what seemed like normal patches, he slipped in a hidden snippet that triggered a persistent “Disabled Third-Party Bundles” pop-up which only triggered when Revenge was set to load. This wasn’t a benign reminder—it actively broke communities and left countless users scrambling to rollback or patch the code. Many suspected it was a power-play to stifle competition and cement his tight already tight grip on the discord mod ecosystem through the loader.
+2. Malicious Pop-Up Insertion: Mid-update to what seemed like normal patches, he slipped in a hidden snippet that triggered a persistent “Disabled Third-Party Bundles” pop-up which only triggered when Revenge was set to load. This wasn’t a benign reminder—it actively broke communities and left countless users scrambling to rollback or patch the code. Many suspected it was a power-play to stifle competition and cement his already tight grip on the discord mod ecosystem through the loader.
 
 3. Community Intimidation Tactics: Many users who dared question the changes of the OSS license were met with terse “take it or leave it” responses, or outright dismissed.
 
