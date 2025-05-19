@@ -57,13 +57,10 @@ env:
   ORIGINAL_IPA_PATH: ${{ github.workspace }}/discord_original.ipa
   BOUND_ICON_PATH: ${{ github.workspace }}/bound_icon.png
   DISCORD_ICON_PATH: ${{ github.workspace }}/discord_icon.png
-  # Fallback icon URLs
-  BOUND_FALLBACK_ICON_URL: "https://github.com/CloudySnowX/BoundTweak/raw/main/assets/logo/icon.png"
-  BOUND_STATIC_ICON_URL: "https://raw.githubusercontent.com/CloudySnowX/BoundTweak/bd527e2/assets/logo/icon.png"
-  DISCORD_FALLBACK_ICON_URL: "https://is1-ssl.mzstatic.com/image/thumb/Purple116/v4/e4/a8/1c/e4a81c42-bd7c-6027-a50c-5211cb87b0c5/AppIcon-0-0-1x_U007emarketing-0-0-0-7-0-0-sRGB-0-0-0-GLES2_U002c0-512MB-85-220-0-0.png/512x512bb.jpg"
   BOUND_APP_NAME: "Bound"
   DISCORD_APP_NAME: "Discord"
   BUILD_FAILED: false
+  SKIP_ICON_CUSTOMIZATION: false
 
 jobs:
   build-tweak:
@@ -288,8 +285,6 @@ jobs:
     runs-on: macos-14
     env:
       IPA_BUILD_FAILED: false
-      BOUND_ICON_VALID: false
-      DISCORD_ICON_VALID: false
     
     steps:
       - name: Checkout code
@@ -355,181 +350,32 @@ jobs:
           fi
           set -e
 
-      - name: Download Bound icon - Primary method
+      - name: Check for icon customization
         run: |
+          # Skip icon customization by default
+          echo "SKIP_ICON_CUSTOMIZATION=true" >> $GITHUB_ENV
+          
+          # Try to download Bound icon but don't fail if it doesn't work
           set +e
-          echo "Attempting to download Bound icon - Primary method..."
-          curl -L -o ${{ env.BOUND_ICON_PATH }} "${{ env.BOUND_FALLBACK_ICON_URL }}"
+          echo "Attempting to download Bound icon..."
+          curl -L -o ${{ env.BOUND_ICON_PATH }} "https://raw.githubusercontent.com/CloudySnowX/BoundTweak/main/assets/logo/icon.png"
           
-          # Check if download was successful
-          if [ $? -ne 0 ]; then
-            echo "::warning::Failed to download Bound icon using primary method."
-            exit 1
-          fi
-          
-          # Verify the file exists and has content
-          if [ ! -s "${{ env.BOUND_ICON_PATH }}" ]; then
-            echo "::warning::Downloaded Bound icon is empty."
-            exit 1
-          fi
-          
-          # Check file type
-          file_type=$(file -b "${{ env.BOUND_ICON_PATH }}")
-          echo "Bound icon file type: $file_type"
-          
-          # Verify it's a valid image using PIL
-          python3 -c "from PIL import Image; Image.open('${{ env.BOUND_ICON_PATH }}')" 2>/dev/null
-          if [ $? -eq 0 ]; then
-            echo "Bound icon validated successfully using primary method."
-            echo "BOUND_ICON_VALID=true" >> $GITHUB_ENV
-            exit 0
-          else
-            echo "::warning::Downloaded Bound icon is not a valid image file."
-            exit 1
-          fi
-          set -e
-
-      - name: Download Bound icon - Secondary method
-        if: env.BOUND_ICON_VALID != 'true'
-        run: |
-          set +e
-          echo "Attempting to download Bound icon - Secondary method..."
-          curl -L -o ${{ env.BOUND_ICON_PATH }} "https://raw.githubusercontent.com/${{ github.repository }}/main/assets/logo/icon.png"
-          
-          # Check if download was successful
-          if [ $? -ne 0 ]; then
-            echo "::warning::Failed to download Bound icon using secondary method."
-            exit 1
-          fi
-          
-          # Verify the file exists and has content
-          if [ ! -s "${{ env.BOUND_ICON_PATH }}" ]; then
-            echo "::warning::Downloaded Bound icon is empty."
-            exit 1
-          fi
-          
-          # Check file type
-          file_type=$(file -b "${{ env.BOUND_ICON_PATH }}")
-          echo "Bound icon file type: $file_type"
-          
-          # Verify it's a valid image using PIL
-          python3 -c "from PIL import Image; Image.open('${{ env.BOUND_ICON_PATH }}')" 2>/dev/null
-          if [ $? -eq 0 ]; then
-            echo "Bound icon validated successfully using secondary method."
-            echo "BOUND_ICON_VALID=true" >> $GITHUB_ENV
-            exit 0
-          else
-            echo "::warning::Downloaded Bound icon is not a valid image file."
-            exit 1
-          fi
-          set -e
-
-      - name: Download Bound icon - Fallback to static URL
-        if: env.BOUND_ICON_VALID != 'true'
-        run: |
-          set +e
-          echo "Attempting to download Bound icon - Static fallback method..."
-          curl -L -o ${{ env.BOUND_ICON_PATH }} "${{ env.BOUND_STATIC_ICON_URL }}"
-          
-          # Check if download was successful
-          if [ $? -ne 0 ]; then
-            echo "::error::Failed to download Bound icon using static fallback method."
-            echo "IPA_BUILD_FAILED=true" >> $GITHUB_ENV
-            echo "BUILD_FAILED=true" >> $GITHUB_ENV
-            exit 1
-          fi
-          
-          # Verify the file exists and has content
-          if [ ! -s "${{ env.BOUND_ICON_PATH }}" ]; then
-            echo "::error::Downloaded Bound icon is empty."
-            echo "IPA_BUILD_FAILED=true" >> $GITHUB_ENV
-            echo "BUILD_FAILED=true" >> $GITHUB_ENV
-            exit 1
-          fi
-          
-          # Check file type
-          file_type=$(file -b "${{ env.BOUND_ICON_PATH }}")
-          echo "Bound icon file type: $file_type"
-          
-          # Verify it's a valid image using PIL
-          python3 -c "from PIL import Image; Image.open('${{ env.BOUND_ICON_PATH }}')" 2>/dev/null
-          if [ $? -eq 0 ]; then
-            echo "Bound icon validated successfully using static fallback method."
-            echo "BOUND_ICON_VALID=true" >> $GITHUB_ENV
-          else
-            echo "::error::All attempts to download a valid Bound icon failed."
-            echo "IPA_BUILD_FAILED=true" >> $GITHUB_ENV
-            echo "BUILD_FAILED=true" >> $GITHUB_ENV
-            exit 1
-          fi
-          set -e
-
-      - name: Extract original Discord icon
-        run: |
-          set +e
-          # Create a temporary directory for extraction
-          mkdir -p temp_extract
-          
-          # Unzip the original IPA to extract the icon
-          unzip -q ${{ env.ORIGINAL_IPA_PATH }} -d temp_extract
-          if [ $? -ne 0 ]; then
-            echo "::warning::Failed to unzip original IPA for icon extraction."
-            exit 1
-          fi
-          
-          # Find the largest AppIcon in the bundle
-          LARGEST_ICON=$(find temp_extract -name "AppIcon*.png" -type f | xargs ls -S | head -1)
-          
-          if [ -z "$LARGEST_ICON" ]; then
-            echo "::warning::Could not find AppIcon in the IPA. Trying to find alternative icon..."
-            LARGEST_ICON=$(find temp_extract -name "*.png" -path "*/Assets.car/*" -type f | xargs ls -S | head -1)
-          fi
-          
-          if [ -z "$LARGEST_ICON" ]; then
-            echo "::warning::Could not find icon in Assets.car."
-            exit 1
-          else
-            echo "Found icon: $LARGEST_ICON"
-            cp "$LARGEST_ICON" ${{ env.DISCORD_ICON_PATH }}
+          # Check if download was successful and file is valid
+          if [ $? -eq 0 ] && [ -s "${{ env.BOUND_ICON_PATH }}" ]; then
+            # Check file type
+            file_type=$(file -b "${{ env.BOUND_ICON_PATH }}")
+            echo "Bound icon file type: $file_type"
             
-            # Verify it's a valid image using PIL
-            python3 -c "from PIL import Image; Image.open('${{ env.DISCORD_ICON_PATH }}')" 2>/dev/null
+            # Try to validate with PIL
+            python3 -c "from PIL import Image; Image.open('${{ env.BOUND_ICON_PATH }}')" 2>/dev/null
             if [ $? -eq 0 ]; then
-              echo "Discord icon validated successfully."
-              echo "DISCORD_ICON_VALID=true" >> $GITHUB_ENV
+              echo "Bound icon validated successfully. Will use icon customization."
+              echo "SKIP_ICON_CUSTOMIZATION=false" >> $GITHUB_ENV
             else
-              echo "::warning::Extracted Discord icon is not a valid image file."
-              exit 1
+              echo "::warning::Bound icon is not a valid image. Will skip icon customization."
             fi
-          fi
-          
-          # Clean up
-          rm -rf temp_extract
-          set -e
-
-      - name: Download Discord fallback icon
-        if: env.DISCORD_ICON_VALID != 'true'
-        run: |
-          set +e
-          echo "Downloading Discord fallback icon..."
-          curl -L -o ${{ env.DISCORD_ICON_PATH }} "${{ env.DISCORD_FALLBACK_ICON_URL }}"
-          if [ $? -ne 0 ]; then
-            echo "::error::Failed to download Discord fallback icon."
-            echo "IPA_BUILD_FAILED=true" >> $GITHUB_ENV
-            echo "BUILD_FAILED=true" >> $GITHUB_ENV
-            exit 1
-          fi
-          
-          # Verify the Discord icon is valid
-          python3 -c "from PIL import Image; Image.open('${{ env.DISCORD_ICON_PATH }}')" 2>/dev/null
-          if [ $? -eq 0 ]; then
-            echo "Discord fallback icon validated successfully."
-            echo "DISCORD_ICON_VALID=true" >> $GITHUB_ENV
           else
-            echo "::error::Discord fallback icon is not a valid image file."
-            echo "IPA_BUILD_FAILED=true" >> $GITHUB_ENV
-            echo "BUILD_FAILED=true" >> $GITHUB_ENV
-            exit 1
+            echo "::warning::Failed to download Bound icon. Will skip icon customization."
           fi
           set -e
 
@@ -602,12 +448,13 @@ jobs:
           VERSION=$(grep '^Version:' control | cut -d ' ' -f 2)
           echo "TWEAK_VERSION=$VERSION" >> $GITHUB_ENV
 
-      - name: Create Bound.ipa with Bound icon
-        if: env.BOUND_ICON_VALID == 'true'
+      - name: Create Bound.ipa with icon customization
+        if: env.SKIP_ICON_CUSTOMIZATION != 'true'
         run: |
           set +e
           DEB_FILE=$(find BoundTweak -name "*.deb")
           
+          echo "Creating Bound.ipa with icon customization..."
           cyan -n "${{ env.BOUND_APP_NAME }}" \
             -k ${{ env.BOUND_ICON_PATH }} \
             -d -i base_discord.ipa \
@@ -617,32 +464,18 @@ jobs:
             -usg
             
           if [ $? -ne 0 ]; then
-            echo "::warning::Failed to create Bound.ipa with Bound icon. Trying without icon customization..."
-            
-            # Try without icon customization
-            cyan -n "${{ env.BOUND_APP_NAME }}" \
-              -d -i base_discord.ipa \
-              -o "${{ github.workspace }}/${{ env.BOUND_APP_NAME }}-NoTrackRC1.ipa" \
-              -f "$DEB_FILE" \
-              "${{ github.workspace }}/DiscordNoTrack.dylib" \
-              -usg
-              
-            if [ $? -ne 0 ]; then
-              echo "::error::Failed to create Bound.ipa."
-              echo "IPA_BUILD_FAILED=true" >> $GITHUB_ENV
-              echo "BUILD_FAILED=true" >> $GITHUB_ENV
-              exit 1
-            fi
+            echo "::warning::Failed to create Bound.ipa with icon customization. Falling back to no icon customization."
+            echo "SKIP_ICON_CUSTOMIZATION=true" >> $GITHUB_ENV
           fi
           set -e
 
       - name: Create Bound.ipa without icon customization
-        if: env.BOUND_ICON_VALID != 'true'
+        if: env.SKIP_ICON_CUSTOMIZATION == 'true'
         run: |
           set +e
           DEB_FILE=$(find BoundTweak -name "*.deb")
           
-          # Try without icon customization
+          echo "Creating Bound.ipa without icon customization..."
           cyan -n "${{ env.BOUND_APP_NAME }}" \
             -d -i base_discord.ipa \
             -o "${{ github.workspace }}/${{ env.BOUND_APP_NAME }}-NoTrackRC1.ipa" \
@@ -658,8 +491,7 @@ jobs:
           fi
           set -e
 
-      - name: Create Discord.ipa with original icon
-        if: env.DISCORD_ICON_VALID == 'true'
+      - name: Create Discord.ipa
         run: |
           set +e
           DEB_FILE=$(find BoundTweak -name "*.deb")
@@ -667,7 +499,7 @@ jobs:
           # Create a copy of the base IPA for Discord build
           cp base_discord.ipa discord_base.ipa
           
-          # First try without icon customization to avoid the broken data stream error
+          echo "Creating Discord.ipa without icon customization..."
           cyan -n "${{ env.DISCORD_APP_NAME }}" \
             -d -i discord_base.ipa \
             -o "${{ github.workspace }}/${{ env.DISCORD_APP_NAME }}-NoTrackRC1.ipa" \
@@ -676,106 +508,55 @@ jobs:
             -usg
             
           if [ $? -ne 0 ]; then
-            echo "::warning::Failed to create Discord.ipa without icon customization. Trying with icon..."
-            
-            # Try with icon customization
-            cyan -n "${{ env.DISCORD_APP_NAME }}" \
-              -k ${{ env.DISCORD_ICON_PATH }} \
-              -d -i discord_base.ipa \
-              -o "${{ github.workspace }}/${{ env.DISCORD_APP_NAME }}-NoTrackRC1.ipa" \
-              -f "$DEB_FILE" \
-              "${{ github.workspace }}/DiscordNoTrack.dylib" \
-              -usg
-              
-            if [ $? -ne 0 ]; then
-              echo "::error::Failed to create Discord.ipa with icon customization."
-              echo "IPA_BUILD_FAILED=true" >> $GITHUB_ENV
-              echo "BUILD_FAILED=true" >> $GITHUB_ENV
-              exit 1
-            fi
-          fi
-          set -e
-
-      - name: Create Discord.ipa without icon customization
-        if: env.DISCORD_ICON_VALID != 'true'
-        run: |
-          set +e
-          DEB_FILE=$(find BoundTweak -name "*.deb")
-          
-          # Create a copy of the base IPA for Discord build
-          cp base_discord.ipa discord_base.ipa
-          
-          # Try without icon customization
-          cyan -n "${{ env.DISCORD_APP_NAME }}" \
-            -d -i discord_base.ipa \
-            -o "${{ github.workspace }}/${{ env.DISCORD_APP_NAME }}-NoTrackRC1.ipa" \
-            -f "$DEB_FILE" \
-            "${{ github.workspace }}/DiscordNoTrack.dylib" \
-            -usg
-            
-          if [ $? -ne 0 ]; then
-            echo "::error::Failed to create Discord.ipa without icon customization."
+            echo "::error::Failed to create Discord.ipa."
             echo "IPA_BUILD_FAILED=true" >> $GITHUB_ENV
             echo "BUILD_FAILED=true" >> $GITHUB_ENV
             exit 1
           fi
           set -e
 
-      - name: Create TrollStore-compatible IPA
+      - name: Create TrollStore-compatible IPA with icon customization
+        if: env.SKIP_ICON_CUSTOMIZATION != 'true'
         run: |
           set +e
           DEB_FILE=$(find BoundTweak -name "*.deb")
           
-          # For TrollStore compatibility, we need to ensure:
-          # 1. No entitlements that conflict with TrollStore
-          # 2. Proper code signing for TrollStore
+          echo "Creating TrollStore-compatible IPA with icon customization..."
+          cyan -n "${{ env.BOUND_APP_NAME }}-TrollStore" \
+            -k ${{ env.BOUND_ICON_PATH }} \
+            -d -i base_discord.ipa \
+            -o "${{ github.workspace }}/${{ env.BOUND_APP_NAME }}-TrollStore.ipa" \
+            -f "$DEB_FILE" \
+            "${{ github.workspace }}/DiscordNoTrack.dylib" \
+            -usg \
+            --trollstore
+            
+          if [ $? -ne 0 ]; then
+            echo "::warning::Failed to create TrollStore-compatible IPA with icon customization. Falling back to no icon customization."
+            echo "SKIP_ICON_CUSTOMIZATION=true" >> $GITHUB_ENV
+          fi
+          set -e
+
+      - name: Create TrollStore-compatible IPA without icon customization
+        if: env.SKIP_ICON_CUSTOMIZATION == 'true'
+        run: |
+          set +e
+          DEB_FILE=$(find BoundTweak -name "*.deb")
           
-          if [ "${{ env.BOUND_ICON_VALID }}" == "true" ]; then
-            # Try with icon customization
-            cyan -n "${{ env.BOUND_APP_NAME }}-TrollStore" \
-              -k ${{ env.BOUND_ICON_PATH }} \
-              -d -i base_discord.ipa \
-              -o "${{ github.workspace }}/${{ env.BOUND_APP_NAME }}-TrollStore.ipa" \
-              -f "$DEB_FILE" \
-              "${{ github.workspace }}/DiscordNoTrack.dylib" \
-              -usg \
-              --trollstore
-              
-            if [ $? -ne 0 ]; then
-              echo "::warning::Failed to create TrollStore-compatible IPA with icon. Trying without icon..."
-              
-              # Try without icon customization
-              cyan -n "${{ env.BOUND_APP_NAME }}-TrollStore" \
-                -d -i base_discord.ipa \
-                -o "${{ github.workspace }}/${{ env.BOUND_APP_NAME }}-TrollStore.ipa" \
-                -f "$DEB_FILE" \
-                "${{ github.workspace }}/DiscordNoTrack.dylib" \
-                -usg \
-                --trollstore
-                
-              if [ $? -ne 0 ]; then
-                echo "::error::Failed to create TrollStore-compatible IPA."
-                echo "IPA_BUILD_FAILED=true" >> $GITHUB_ENV
-                echo "BUILD_FAILED=true" >> $GITHUB_ENV
-                exit 1
-              fi
-            fi
-          else
-            # Try without icon customization
-            cyan -n "${{ env.BOUND_APP_NAME }}-TrollStore" \
-              -d -i base_discord.ipa \
-              -o "${{ github.workspace }}/${{ env.BOUND_APP_NAME }}-TrollStore.ipa" \
-              -f "$DEB_FILE" \
-              "${{ github.workspace }}/DiscordNoTrack.dylib" \
-              -usg \
-              --trollstore
-              
-            if [ $? -ne 0 ]; then
-              echo "::error::Failed to create TrollStore-compatible IPA without icon."
-              echo "IPA_BUILD_FAILED=true" >> $GITHUB_ENV
-              echo "BUILD_FAILED=true" >> $GITHUB_ENV
-              exit 1
-            fi
+          echo "Creating TrollStore-compatible IPA without icon customization..."
+          cyan -n "${{ env.BOUND_APP_NAME }}-TrollStore" \
+            -d -i base_discord.ipa \
+            -o "${{ github.workspace }}/${{ env.BOUND_APP_NAME }}-TrollStore.ipa" \
+            -f "$DEB_FILE" \
+            "${{ github.workspace }}/DiscordNoTrack.dylib" \
+            -usg \
+            --trollstore
+            
+          if [ $? -ne 0 ]; then
+            echo "::error::Failed to create TrollStore-compatible IPA without icon customization."
+            echo "IPA_BUILD_FAILED=true" >> $GITHUB_ENV
+            echo "BUILD_FAILED=true" >> $GITHUB_ENV
+            exit 1
           fi
           set -e
 
