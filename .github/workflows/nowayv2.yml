@@ -359,11 +359,23 @@ jobs:
         run: |
           set +e
           echo "Installing PIL and debugging tools..."
-          pip install Pillow pngcheck
+          pip3 install --upgrade pip
+          pip3 install Pillow
+          
+          # Verify PIL installation
+          python3 -c "import PIL; print('PIL version:', PIL.__version__)"
           if [ $? -ne 0 ]; then
-            echo "::warning::Failed to install pngcheck. Will continue without it."
-            pip install Pillow
+            echo "::error::Failed to install PIL. Trying alternative method..."
+            pip3 install --user Pillow
+            python3 -c "import PIL; print('PIL version:', PIL.__version__)"
+            if [ $? -ne 0 ]; then
+              echo "::error::Failed to install PIL with alternative method."
+              echo "SKIP_ICON_CUSTOMIZATION=true" >> $GITHUB_ENV
+            fi
           fi
+          
+          # Try to install pngcheck if available
+          brew install pngcheck || echo "pngcheck not available, continuing without it"
           set -e
 
       - name: Check for icon customization - Source 1
@@ -586,7 +598,7 @@ jobs:
       - name: Install cyan
         run: |
           set +e
-          pip install --force-reinstall https://github.com/asdfzxcvbn/pyzule-rw/archive/main.zip Pillow
+          pip3 install --force-reinstall https://github.com/asdfzxcvbn/pyzule-rw/archive/main.zip Pillow
           if [ $? -ne 0 ]; then
             echo "::error::Failed to install cyan."
             echo "IPA_BUILD_FAILED=true" >> $GITHUB_ENV
