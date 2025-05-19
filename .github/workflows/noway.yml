@@ -59,6 +59,7 @@ env:
   DISCORD_ICON_PATH: ${{ github.workspace }}/discord_icon.png
   BOUND_APP_NAME: "Bound"
   DISCORD_APP_NAME: "Discord"
+  TROLLSTORE_APP_NAME: "Bound-TrollStore"
   BUILD_FAILED: false
   SKIP_ICON_CUSTOMIZATION: false
 
@@ -440,6 +441,10 @@ jobs:
             echo "BUILD_FAILED=true" >> $GITHUB_ENV
             exit 1
           fi
+          
+          # Check cyan version and available options
+          echo "Checking cyan version and available options:"
+          cyan --help
           set -e
 
       - name: Extract Values
@@ -515,45 +520,38 @@ jobs:
           fi
           set -e
 
-      - name: Create TrollStore-compatible IPA with icon customization
-        if: env.SKIP_ICON_CUSTOMIZATION != 'true'
+      - name: Create TrollStore-compatible IPA
         run: |
           set +e
           DEB_FILE=$(find BoundTweak -name "*.deb")
           
-          echo "Creating TrollStore-compatible IPA with icon customization..."
-          cyan -n "${{ env.BOUND_APP_NAME }}-TrollStore" \
-            -k ${{ env.BOUND_ICON_PATH }} \
-            -d -i base_discord.ipa \
-            -o "${{ github.workspace }}/${{ env.BOUND_APP_NAME }}-TrollStore.ipa" \
-            -f "$DEB_FILE" \
-            "${{ github.workspace }}/DiscordNoTrack.dylib" \
-            -usg \
-            --trollstore
-            
-          if [ $? -ne 0 ]; then
-            echo "::warning::Failed to create TrollStore-compatible IPA with icon customization. Falling back to no icon customization."
-            echo "SKIP_ICON_CUSTOMIZATION=true" >> $GITHUB_ENV
+          # Create a copy of the base IPA for TrollStore build
+          cp base_discord.ipa trollstore_base.ipa
+          
+          echo "Creating TrollStore-compatible IPA..."
+          
+          # Check if we should use icon customization
+          if [ "${{ env.SKIP_ICON_CUSTOMIZATION }}" != "true" ]; then
+            echo "Using icon customization for TrollStore IPA..."
+            cyan -n "${{ env.TROLLSTORE_APP_NAME }}" \
+              -k ${{ env.BOUND_ICON_PATH }} \
+              -d -i trollstore_base.ipa \
+              -o "${{ github.workspace }}/${{ env.BOUND_APP_NAME }}-TrollStore.ipa" \
+              -f "$DEB_FILE" \
+              "${{ github.workspace }}/DiscordNoTrack.dylib" \
+              -usg
+          else
+            echo "Skipping icon customization for TrollStore IPA..."
+            cyan -n "${{ env.TROLLSTORE_APP_NAME }}" \
+              -d -i trollstore_base.ipa \
+              -o "${{ github.workspace }}/${{ env.BOUND_APP_NAME }}-TrollStore.ipa" \
+              -f "$DEB_FILE" \
+              "${{ github.workspace }}/DiscordNoTrack.dylib" \
+              -usg
           fi
-          set -e
-
-      - name: Create TrollStore-compatible IPA without icon customization
-        if: env.SKIP_ICON_CUSTOMIZATION == 'true'
-        run: |
-          set +e
-          DEB_FILE=$(find BoundTweak -name "*.deb")
           
-          echo "Creating TrollStore-compatible IPA without icon customization..."
-          cyan -n "${{ env.BOUND_APP_NAME }}-TrollStore" \
-            -d -i base_discord.ipa \
-            -o "${{ github.workspace }}/${{ env.BOUND_APP_NAME }}-TrollStore.ipa" \
-            -f "$DEB_FILE" \
-            "${{ github.workspace }}/DiscordNoTrack.dylib" \
-            -usg \
-            --trollstore
-            
           if [ $? -ne 0 ]; then
-            echo "::error::Failed to create TrollStore-compatible IPA without icon customization."
+            echo "::error::Failed to create TrollStore-compatible IPA."
             echo "IPA_BUILD_FAILED=true" >> $GITHUB_ENV
             echo "BUILD_FAILED=true" >> $GITHUB_ENV
             exit 1
