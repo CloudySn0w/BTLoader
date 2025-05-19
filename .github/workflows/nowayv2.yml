@@ -66,6 +66,8 @@ env:
   BOUND_ICON_SOURCE_1: "https://raw.githubusercontent.com/CloudySnowX/BoundTweak/main/assets/logo/icon.png"
   BOUND_ICON_SOURCE_2: "https://github.com/CloudySnowX/BoundTweak/raw/main/assets/logo/icon.png"
   BOUND_ICON_SOURCE_3: "https://raw.githubusercontent.com/CloudySnowX/BoundTweak/bd527e2/assets/logo/icon.png"
+  # Python virtual environment path
+  VENV_PATH: "${{ github.workspace }}/venv"
 
 jobs:
   build-tweak:
@@ -355,23 +357,40 @@ jobs:
           fi
           set -e
 
-      - name: Install PIL and debugging tools
+      - name: Setup Python virtual environment
         run: |
           set +e
-          echo "Installing PIL and debugging tools..."
-          pip3 install --upgrade pip
-          pip3 install Pillow
+          echo "Setting up Python virtual environment..."
+          
+          # Create virtual environment
+          python3 -m venv ${{ env.VENV_PATH }}
+          if [ $? -ne 0 ]; then
+            echo "::warning::Failed to create virtual environment. Trying alternative method..."
+            # Try alternative method
+            python3 -m pip install --user virtualenv
+            python3 -m virtualenv ${{ env.VENV_PATH }}
+            if [ $? -ne 0 ]; then
+              echo "::error::Failed to create virtual environment with alternative method."
+              echo "SKIP_ICON_CUSTOMIZATION=true" >> $GITHUB_ENV
+            fi
+          fi
+          
+          # Activate virtual environment
+          source ${{ env.VENV_PATH }}/bin/activate
+          
+          # Upgrade pip in the virtual environment
+          python3 -m pip install --upgrade pip
+          
+          # Install PIL in the virtual environment
+          python3 -m pip install Pillow
           
           # Verify PIL installation
           python3 -c "import PIL; print('PIL version:', PIL.__version__)"
           if [ $? -ne 0 ]; then
-            echo "::error::Failed to install PIL. Trying alternative method..."
-            pip3 install --user Pillow
-            python3 -c "import PIL; print('PIL version:', PIL.__version__)"
-            if [ $? -ne 0 ]; then
-              echo "::error::Failed to install PIL with alternative method."
-              echo "SKIP_ICON_CUSTOMIZATION=true" >> $GITHUB_ENV
-            fi
+            echo "::warning::Failed to install PIL in virtual environment."
+            echo "SKIP_ICON_CUSTOMIZATION=true" >> $GITHUB_ENV
+          else
+            echo "PIL installed successfully in virtual environment."
           fi
           
           # Try to install pngcheck if available
@@ -382,6 +401,9 @@ jobs:
         run: |
           # Skip icon customization by default
           echo "SKIP_ICON_CUSTOMIZATION=true" >> $GITHUB_ENV
+          
+          # Activate virtual environment
+          source ${{ env.VENV_PATH }}/bin/activate
           
           # Try to download Bound icon from source 1
           set +e
@@ -426,6 +448,9 @@ jobs:
       - name: Check for icon customization - Source 2
         if: env.SKIP_ICON_CUSTOMIZATION == 'true'
         run: |
+          # Activate virtual environment
+          source ${{ env.VENV_PATH }}/bin/activate
+          
           # Try to download Bound icon from source 2
           set +e
           echo "Attempting to download Bound icon from Source 2..."
@@ -469,6 +494,9 @@ jobs:
       - name: Check for icon customization - Source 3
         if: env.SKIP_ICON_CUSTOMIZATION == 'true'
         run: |
+          # Activate virtual environment
+          source ${{ env.VENV_PATH }}/bin/activate
+          
           # Try to download Bound icon from source 3
           set +e
           echo "Attempting to download Bound icon from Source 3..."
@@ -512,6 +540,9 @@ jobs:
       - name: Create local icon if all sources fail
         if: env.SKIP_ICON_CUSTOMIZATION == 'true'
         run: |
+          # Activate virtual environment
+          source ${{ env.VENV_PATH }}/bin/activate
+          
           set +e
           echo "All icon sources failed. Attempting to create a local icon..."
           
@@ -598,9 +629,16 @@ jobs:
       - name: Install cyan
         run: |
           set +e
-          pip3 install --force-reinstall https://github.com/asdfzxcvbn/pyzule-rw/archive/main.zip Pillow
+          # Activate virtual environment
+          source ${{ env.VENV_PATH }}/bin/activate
+          
+          # Install cyan in the virtual environment
+          echo "Installing cyan in virtual environment..."
+          python3 -m pip install --upgrade pip
+          python3 -m pip install https://github.com/asdfzxcvbn/pyzule-rw/archive/main.zip Pillow
+          
           if [ $? -ne 0 ]; then
-            echo "::error::Failed to install cyan."
+            echo "::error::Failed to install cyan in virtual environment."
             echo "IPA_BUILD_FAILED=true" >> $GITHUB_ENV
             echo "BUILD_FAILED=true" >> $GITHUB_ENV
             exit 1
@@ -621,6 +659,9 @@ jobs:
         if: env.SKIP_ICON_CUSTOMIZATION != 'true'
         run: |
           set +e
+          # Activate virtual environment
+          source ${{ env.VENV_PATH }}/bin/activate
+          
           DEB_FILE=$(find BoundTweak -name "*.deb")
           
           echo "Creating Bound.ipa with icon customization..."
@@ -642,6 +683,9 @@ jobs:
         if: env.SKIP_ICON_CUSTOMIZATION == 'true'
         run: |
           set +e
+          # Activate virtual environment
+          source ${{ env.VENV_PATH }}/bin/activate
+          
           DEB_FILE=$(find BoundTweak -name "*.deb")
           
           echo "Creating Bound.ipa without icon customization..."
@@ -663,6 +707,9 @@ jobs:
       - name: Create Discord.ipa
         run: |
           set +e
+          # Activate virtual environment
+          source ${{ env.VENV_PATH }}/bin/activate
+          
           DEB_FILE=$(find BoundTweak -name "*.deb")
           
           # Create a copy of the base IPA for Discord build
@@ -687,6 +734,9 @@ jobs:
       - name: Create TrollStore-compatible IPA
         run: |
           set +e
+          # Activate virtual environment
+          source ${{ env.VENV_PATH }}/bin/activate
+          
           DEB_FILE=$(find BoundTweak -name "*.deb")
           
           # Create a copy of the base IPA for TrollStore build
