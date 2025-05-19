@@ -1,5 +1,5 @@
 name: Enhanced Deploy Build
-run-name: ${{ github.event.inputs.release == 'true' && 'Release' || 'Build' }} for ${{ github.event.inputs.ipa_source_type }} source
+run-name: ${{ github.event.inputs.release == 'true' && 'Release' || 'Build' }} for ${{ github.event.inputs.ipa_url }}
 
 on:
   workflow_dispatch:
@@ -26,11 +26,6 @@ on:
         description: "TestFlight build"
         required: true
         type: boolean
-      caller_workflow:
-        default: ""
-        description: "Caller workflow name"
-        required: false
-        type: string
       release_name:
         description: "Custom release name"
         required: false
@@ -56,56 +51,6 @@ on:
         required: false
         type: boolean
         default: false
-      discussion_category_name:
-        description: "Category for release discussions"
-        required: false
-        type: string
-        default: ""
-
-  workflow_call:
-    inputs:
-      ipa_source_type:
-        description: "Source type for IPA file"
-        required: true
-        type: string
-        default: "direct_url"
-      ipa_url:
-        required: true
-        type: string
-      is_testflight:
-        required: true
-        type: boolean
-      release:
-        required: false
-        type: boolean
-        default: true
-      caller_workflow:
-        required: false
-        type: string
-      release_name:
-        required: false
-        type: string
-        default: ""
-      tag_name:
-        required: false
-        type: string
-        default: ""
-      release_body:
-        required: false
-        type: string
-        default: "Download the latest stable version here. Coming preinjected with DiscordNoTrack and OpenInDiscord"
-      prerelease:
-        required: false
-        type: boolean
-        default: false
-      draft:
-        required: false
-        type: boolean
-        default: false
-      discussion_category_name:
-        required: false
-        type: string
-        default: ""
 
 env:
   GH_TOKEN: ${{ github.token }}
@@ -130,7 +75,6 @@ jobs:
           submodules: true
 
       - name: Download Tweak
-        if: inputs.caller_workflow != 'ci'
         run: |
           set +e
           release_info=$(gh api --header 'Accept: application/vnd.github+json' repos/${{ github.repository }}/releases/latest)
@@ -221,11 +165,11 @@ jobs:
     
     steps:
       - name: Download IPA from Direct URL
-        if: github.event.inputs.ipa_source_type == 'direct_url' || inputs.ipa_source_type == 'direct_url'
+        if: github.event.inputs.ipa_source_type == 'direct_url'
         run: |
           set +e
           echo "Downloading IPA from direct URL..."
-          curl -L -o discord.ipa "${{ github.event.inputs.ipa_url || inputs.ipa_url }}" --fail
+          curl -L -o discord.ipa "${{ github.event.inputs.ipa_url }}" --fail
           exit_code=$?
           if [ $exit_code -ne 0 ]; then
             echo "::error::Failed to download IPA from direct URL. Exit code: $exit_code"
@@ -239,19 +183,19 @@ jobs:
           set -e
 
       - name: Install gdown for Google Drive
-        if: github.event.inputs.ipa_source_type == 'google_drive' || inputs.ipa_source_type == 'google_drive'
+        if: github.event.inputs.ipa_source_type == 'google_drive'
         run: |
           pip install gdown
 
       - name: Download IPA from Google Drive
         id: gdrive_download
-        if: github.event.inputs.ipa_source_type == 'google_drive' || inputs.ipa_source_type == 'google_drive'
+        if: github.event.inputs.ipa_source_type == 'google_drive'
         run: |
           set +e
           echo "Downloading IPA from Google Drive..."
           
           # Extract file ID from Google Drive URL
-          URL="${{ github.event.inputs.ipa_url || inputs.ipa_url }}"
+          URL="${{ github.event.inputs.ipa_url }}"
           
           # Add timestamp to URL to prevent caching
           TIMESTAMP=$(date +%s)
@@ -646,9 +590,7 @@ jobs:
           path: ${{ github.workspace }}/${{ env.BOUND_APP_NAME }}-TrollStore.ipa
 
   release-app:
-    if: |
-      inputs.caller_workflow != 'ci' && 
-      (github.event.inputs.release == 'true' || inputs.release == true)
+    if: github.event.inputs.release == 'true'
     runs-on: macos-15
     needs: [build-tweak, download-ipa, build-ipas]
     permissions:
@@ -727,7 +669,7 @@ jobs:
             exit 1
           fi
           
-          if [[ "${{ github.event.inputs.is_testflight || inputs.is_testflight }}" == "true" ]]; then
+          if [[ "${{ github.event.inputs.is_testflight }}" == "true" ]]; then
             BUILD=$(plutil -p Payload/Discord.app/Info.plist | grep CFBundleVersion | cut -d '"' -f 4)
             if [ -z "$BUILD" ]; then
               echo "::warning::Failed to extract TestFlight build number. Using version only."
@@ -750,10 +692,10 @@ jobs:
         if: env.BUILD_FAILED != 'true'
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ github.event.inputs.tag_name || inputs.tag_name || format('v{0}', env.DISCORD_VERSION) }}
-          name: ${{ github.event.inputs.release_name || inputs.release_name || format('{0} v{1} (Tweak v{2})', env.APP_NAME, env.DISCORD_VERSION, env.TWEAK_VERSION) }}
+          tag_name: ${{ github.event.inputs.tag_name || format('v{0}', env.DISCORD_VERSION) }}
+          name: ${{ github.event.inputs.release_name || format('{0} v{1} (Tweak v{2})', env.APP_NAME, env.DISCORD_VERSION, env.TWEAK_VERSION) }}
           body: |
-            ${{ github.event.inputs.release_body || inputs.release_body }}
+            ${{ github.event.inputs.release_body }}
             
             ## Downloads
             
@@ -781,8 +723,7 @@ jobs:
             Bound-TrollStore.ipa
             *-arm64.deb
           generate_release_notes: false
-          prerelease: ${{ github.event.inputs.prerelease || inputs.prerelease || env.IS_PRERELEASE == 'true' }}
-          draft: ${{ github.event.inputs.draft || inputs.draft }}
-          discussion_category_name: ${{ github.event.inputs.discussion_category_name || inputs.discussion_category_name }}
+          prerelease: ${{ github.event.inputs.prerelease || env.IS_PRERELEASE == 'true' }}
+          draft: ${{ github.event.inputs.draft }}
           fail_on_unmatched_files: true
           token: ${{ env.GH_TOKEN }}
