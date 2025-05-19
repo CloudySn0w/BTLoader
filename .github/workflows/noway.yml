@@ -57,6 +57,7 @@ env:
   ORIGINAL_IPA_PATH: ${{ github.workspace }}/discord_original.ipa
   BOUND_ICON_PATH: ${{ github.workspace }}/bound_icon.png
   DISCORD_ICON_PATH: ${{ github.workspace }}/discord_icon.png
+  DISCORD_FALLBACK_ICON_URL: "https://is1-ssl.mzstatic.com/image/thumb/Purple116/v4/e4/a8/1c/e4a81c42-bd7c-6027-a50c-5211cb87b0c5/AppIcon-0-0-1x_U007emarketing-0-0-0-7-0-0-sRGB-0-0-0-GLES2_U002c0-512MB-85-220-0-0.png/512x512bb.jpg"
   BOUND_APP_NAME: "Bound"
   DISCORD_APP_NAME: "Discord"
   BUILD_FAILED: false
@@ -284,6 +285,7 @@ jobs:
     runs-on: macos-14
     env:
       IPA_BUILD_FAILED: false
+      DISCORD_ICON_VALID: false
     
     steps:
       - name: Checkout code
@@ -349,41 +351,6 @@ jobs:
           fi
           set -e
 
-      - name: Extract original Discord icon
-        run: |
-          set +e
-          # Create a temporary directory for extraction
-          mkdir -p temp_extract
-          
-          # Unzip the original IPA to extract the icon
-          unzip -q ${{ env.ORIGINAL_IPA_PATH }} -d temp_extract
-          if [ $? -ne 0 ]; then
-            echo "::error::Failed to unzip original IPA for icon extraction."
-            echo "IPA_BUILD_FAILED=true" >> $GITHUB_ENV
-            echo "BUILD_FAILED=true" >> $GITHUB_ENV
-            exit 1
-          fi
-          
-          # Find the largest AppIcon in the bundle
-          LARGEST_ICON=$(find temp_extract -name "AppIcon*.png" -type f | xargs ls -S | head -1)
-          
-          if [ -z "$LARGEST_ICON" ]; then
-            echo "::warning::Could not find AppIcon in the IPA. Trying to find alternative icon..."
-            LARGEST_ICON=$(find temp_extract -name "*.png" -path "*/Assets.car/*" -type f | xargs ls -S | head -1)
-          fi
-          
-          if [ -z "$LARGEST_ICON" ]; then
-            echo "::warning::Could not find icon in Assets.car. Using default Discord icon URL..."
-            curl -L -o ${{ env.DISCORD_ICON_PATH }} "https://is1-ssl.mzstatic.com/image/thumb/Purple116/v4/e4/a8/1c/e4a81c42-bd7c-6027-a50c-5211cb87b0c5/AppIcon-0-0-1x_U007emarketing-0-0-0-7-0-0-sRGB-0-0-0-GLES2_U002c0-512MB-85-220-0-0.png/512x512bb.jpg"
-          else
-            echo "Found icon: $LARGEST_ICON"
-            cp "$LARGEST_ICON" ${{ env.DISCORD_ICON_PATH }}
-          fi
-          
-          # Clean up
-          rm -rf temp_extract
-          set -e
-
       - name: Download Bound icon
         run: |
           set +e
@@ -399,6 +366,39 @@ jobs:
               echo "BUILD_FAILED=true" >> $GITHUB_ENV
               exit 1
             fi
+          fi
+          
+          # Verify the Bound icon is valid
+          python3 -c "from PIL import Image; Image.open('${{ env.BOUND_ICON_PATH }}')" 2>/dev/null
+          if [ $? -ne 0 ]; then
+            echo "::error::Bound icon is not a valid image file."
+            echo "IPA_BUILD_FAILED=true" >> $GITHUB_ENV
+            echo "BUILD_FAILED=true" >> $GITHUB_ENV
+            exit 1
+          fi
+          set -e
+
+      - name: Download Discord fallback icon
+        run: |
+          set +e
+          echo "Downloading Discord fallback icon..."
+          curl -L -o ${{ env.DISCORD_ICON_PATH }} "${{ env.DISCORD_FALLBACK_ICON_URL }}"
+          if [ $? -ne 0 ]; then
+            echo "::error::Failed to download Discord fallback icon."
+            echo "IPA_BUILD_FAILED=true" >> $GITHUB_ENV
+            echo "BUILD_FAILED=true" >> $GITHUB_ENV
+            exit 1
+          fi
+          
+          # Verify the Discord icon is valid
+          python3 -c "from PIL import Image; Image.open('${{ env.DISCORD_ICON_PATH }}')" 2>/dev/null
+          if [ $? -ne 0 ]; then
+            echo "::error::Discord fallback icon is not a valid image file."
+            echo "IPA_BUILD_FAILED=true" >> $GITHUB_ENV
+            echo "BUILD_FAILED=true" >> $GITHUB_ENV
+            exit 1
+          else
+            echo "DISCORD_ICON_VALID=true" >> $GITHUB_ENV
           fi
           set -e
 
@@ -493,23 +493,40 @@ jobs:
           set -e
 
       - name: Create Discord.ipa with original icon
+        if: env.DISCORD_ICON_VALID == 'true'
         run: |
           set +e
           DEB_FILE=$(find BoundTweak -name "*.deb")
           
+          # Create a copy of the base IPA for Discord build
+          cp base_discord.ipa discord_base.ipa
+          
+          # First try without icon customization to avoid the broken data stream error
           cyan -n "${{ env.DISCORD_APP_NAME }}" \
-            -k ${{ env.DISCORD_ICON_PATH }} \
-            -d -i base_discord.ipa \
+            -d -i discord_base.ipa \
             -o "${{ github.workspace }}/${{ env.DISCORD_APP_NAME }}-NoTrackRC1.ipa" \
             -f "$DEB_FILE" \
             "${{ github.workspace }}/DiscordNoTrack.dylib" \
             -usg
             
           if [ $? -ne 0 ]; then
-            echo "::error::Failed to create Discord.ipa with original icon."
-            echo "IPA_BUILD_FAILED=true" >> $GITHUB_ENV
-            echo "BUILD_FAILED=true" >> $GITHUB_ENV
-            exit 1
+            echo "::warning::Failed to create Discord.ipa without icon customization. Trying with icon..."
+            
+            # Try with icon customization
+            cyan -n "${{ env.DISCORD_APP_NAME }}" \
+              -k ${{ env.DISCORD_ICON_PATH }} \
+              -d -i discord_base.ipa \
+              -o "${{ github.workspace }}/${{ env.DISCORD_APP_NAME }}-NoTrackRC1.ipa" \
+              -f "$DEB_FILE" \
+              "${{ github.workspace }}/DiscordNoTrack.dylib" \
+              -usg
+              
+            if [ $? -ne 0 ]; then
+              echo "::error::Failed to create Discord.ipa with icon customization."
+              echo "IPA_BUILD_FAILED=true" >> $GITHUB_ENV
+              echo "BUILD_FAILED=true" >> $GITHUB_ENV
+              exit 1
+            fi
           fi
           set -e
 
