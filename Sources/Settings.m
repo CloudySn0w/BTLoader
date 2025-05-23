@@ -4,12 +4,12 @@
 #import "Utils.h"
 #import <UniformTypeIdentifiers/UniformTypeIdentifiers.h>
 
-@implementation BunnySettingsViewController
+@implementation BTLoaderSettingsViewController
 
 - (instancetype)initWithVersion:(NSString *)version {
     self = [super init];
     if (self) {
-        self.title = [NSString stringWithFormat:@"Bunny v%@ Recovery Menu", version];
+        self.title = [NSString stringWithFormat:@"BTLoader v%@ Recovery Menu", version];
     }
     return self;
 }
@@ -227,7 +227,7 @@
                                                                      URLQueryAllowedCharacterSet]];
 
     NSString *urlString = [NSString
-        stringWithFormat:@"https://github.com/bunny-mod/BunnyTweak/issues/new?title=%@&body=%@",
+        stringWithFormat:@"https://github.com/CloudySnowX/BoundTweak/issues/new?title=%@&body=%@",
                          encodedTitle, encodedBody];
     NSURL *url          = [NSURL URLWithString:urlString];
     [[UIApplication sharedApplication] openURL:url options:@{} completionHandler:nil];
@@ -338,8 +338,8 @@
 }
 
 void showSettingsSheet(void) {
-    BunnySettingsViewController *settingsVC =
-        [[BunnySettingsViewController alloc] initWithVersion:PACKAGE_VERSION];
+    BTLoaderSettingsViewController *settingsVC =
+        [[BTLoaderSettingsViewController alloc] initWithVersion:PACKAGE_VERSION];
 
     UINavigationController *navController =
         [[UINavigationController alloc] initWithRootViewController:settingsVC];
