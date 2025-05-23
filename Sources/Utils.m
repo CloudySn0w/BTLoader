@@ -156,7 +156,7 @@ void setCustomBundleURL(NSURL *url, UIViewController *presenter) {
 void resetCustomBundleURL(UIViewController *presenter) {
     LoaderConfig *config        = [LoaderConfig getLoaderConfig];
     config.customLoadUrlEnabled = NO;
-    config.customLoadUrl        = [NSURL URLWithString:@"http://localhost:4040/bunny.js"];
+    config.customLoadUrl        = [NSURL URLWithString:@"http://localhost:4040/btloader.js"];
     [config saveConfig];
     removeCachedBundle();
     gracefulExit(presenter);
@@ -238,7 +238,7 @@ static void showCommitsForBranch(NSString *branch, UIViewController *presenter,
                                  NSURLSession *session);
 
 void showBundleSelector(UIViewController *presenter) {
-    BunnyLog(@"Starting bundle selector...");
+    BTLoaderLog(@"Starting bundle selector...");
 
     UIAlertController *loadingAlert =
         [UIAlertController alertControllerWithTitle:@"Loading"
@@ -246,11 +246,11 @@ void showBundleSelector(UIViewController *presenter) {
                                      preferredStyle:UIAlertControllerStyleAlert];
     [presenter presentViewController:loadingAlert animated:YES completion:nil];
 
-    NSURL *url = [NSURL URLWithString:@"https://api.github.com/repos/bunny-mod/builds/branches"];
+    NSURL *url = [NSURL URLWithString:@"https://api.github.com/repos/CloudySnowX/BoundTweak/branches"];
     NSURLSession *session = [NSURLSession
         sessionWithConfiguration:[NSURLSessionConfiguration defaultSessionConfiguration]];
 
-    BunnyLog(@"Fetching branches from: %@", url);
+    BTLoaderLog(@"Fetching branches from: %@", url);
 
     [[session
           dataTaskWithURL:url
@@ -314,7 +314,7 @@ void showBundleSelector(UIViewController *presenter) {
 
 static void showCommitsForBranch(NSString *branch, UIViewController *presenter,
                                  NSURLSession *session) {
-    BunnyLog(@"Fetching commits for branch: %@", branch);
+    BTLoaderLog(@"Fetching commits for branch: %@", branch);
 
     UIAlertController *loadingCommits =
         [UIAlertController alertControllerWithTitle:@"Loading"
@@ -324,7 +324,7 @@ static void showCommitsForBranch(NSString *branch, UIViewController *presenter,
 
     NSString *commitsUrl = [NSString
         stringWithFormat:
-            @"https://api.github.com/repos/bunny-mod/builds/commits?sha=%@&per_page=10", branch];
+            @"https://api.github.com/repos/CloudySnowX/BoundTweak/commits?sha=%@&per_page=10", branch];
     NSURL *commitsURL    = [NSURL URLWithString:commitsUrl];
 
     [[session
@@ -353,32 +353,22 @@ static void showCommitsForBranch(NSString *branch, UIViewController *presenter,
                                            }
 
                                            UIAlertController *commitAlert = [UIAlertController
-                                               alertControllerWithTitle:@"Select Version"
+                                               alertControllerWithTitle:@"Select Commit"
                                                                 message:nil
                                                          preferredStyle:
                                                              UIAlertControllerStyleAlert];
 
                                            for (NSDictionary *commit in commits) {
-                                               NSString *sha = commit[@"sha"];
-                                               NSString *dateStr =
-                                                   commit[@"commit"][@"author"][@"date"];
-
-                                               NSDateFormatter *iso8601Formatter =
-                                                   [[NSDateFormatter alloc] init];
-                                               iso8601Formatter.dateFormat =
-                                                   @"yyyy-MM-dd'T'HH:mm:ssZ";
-                                               NSDate *date =
-                                                   [iso8601Formatter dateFromString:dateStr];
-
-                                               NSDateFormatter *formatter =
-                                                   [[NSDateFormatter alloc] init];
-                                               formatter.dateFormat = @"MMM d, yyyy";
-
-                                               NSString *title = [NSString
-                                                   stringWithFormat:@"%@ (%@)",
-                                                                    [sha substringToIndex:7],
-                                                                    [formatter
-                                                                        stringFromDate:date]];
+                                               NSDictionary *commitData = commit[@"commit"];
+                                               NSString *message =
+                                                   [commitData[@"message"]
+                                                       componentsSeparatedByString:@"\n"]
+                                                       .firstObject;
+                                               NSString *sha = [commit[@"sha"]
+                                                   substringToIndex:7];
+                                               NSString *title =
+                                                   [NSString stringWithFormat:@"%@ (%@)", message,
+                                                                              sha];
 
                                                [commitAlert
                                                    addAction:
@@ -387,22 +377,17 @@ static void showCommitsForBranch(NSString *branch, UIViewController *presenter,
                                                                      style:UIAlertActionStyleDefault
                                                                    handler:^(
                                                                        UIAlertAction *action) {
+                                                                       NSString *fullSha =
+                                                                           commit[@"sha"];
                                                                        NSString *bundleUrl =
                                                                            [NSString
                                                                                stringWithFormat:
-                                                                                   @"https://"
-                                                                                   @"raw."
-                                                                                   @"githubusercont"
-                                                                                   @"ent.com/"
-                                                                                   @"bunny-mod/"
-                                                                                   @"builds/%@/"
-                                                                                   @"bunny.min.js",
-                                                                                   sha];
+                                                                                   @"https://raw.githubusercontent.com/CloudySnowX/BoundTweak/%@/bundle.js",
+                                                                                   fullSha];
                                                                        NSURL *url = [NSURL
                                                                            URLWithString:bundleUrl];
                                                                        setCustomBundleURL(
                                                                            url, presenter);
-                                                                       reloadApp(presenter);
                                                                    }]];
                                            }
 
@@ -422,17 +407,13 @@ static void showCommitsForBranch(NSString *branch, UIViewController *presenter,
 }
 
 void removeCachedBundle(void) {
-    NSURL *bundleURL = [getPyoncordDirectory() URLByAppendingPathComponent:@"bundle.js"];
-    NSError *error   = nil;
-    [[NSFileManager defaultManager] removeItemAtURL:bundleURL error:&error];
+    NSError *error = nil;
+    [[NSFileManager defaultManager]
+        removeItemAtURL:[getPyoncordDirectory() URLByAppendingPathComponent:@"bundle.js"]
+                  error:&error];
     if (error) {
-        BunnyLog(@"Failed to remove cached bundle: %@", error);
+        BTLoaderLog(@"Failed to remove cached bundle: %@", error);
     }
-}
-
-void refetchBundle(UIViewController *presenter) {
-    removeCachedBundle();
-    gracefulExit(presenter);
 }
 
 void deletePluginsAndReload(UIViewController *presenter) {
@@ -442,5 +423,10 @@ void deletePluginsAndReload(UIViewController *presenter) {
 
 void deleteThemesAndReload(UIViewController *presenter) {
     deleteThemes();
+    reloadApp(presenter);
+}
+
+void refetchBundle(UIViewController *presenter) {
+    removeCachedBundle();
     reloadApp(presenter);
 }
