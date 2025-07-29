@@ -1,10 +1,11 @@
-# Welcome To BoundTweak
+# 💧 BTLoader
 
-**-----**
-*After you read whats below I suggest you look into* [The Future Of BoundTweak](TheFutureOfBT.md)
-**-----**
+Tweak to inject [Ra1n](https://github.com/ra1ncord/ra1n) into Discord and perform various tasks.
 
-*Making spaceee*
+## Installation
 
-— Your fellow tinkerer,
-BoundTweak Maintainer CloudySn0w
+The latest builds can be found in the [Releases](https://github.com/CloudySn0w/BTLoader/releases) tab.
+
+## Legacy Of BTLoader
+
+Read about our history here at [The Legacy Of BTLoader](TheLegacyOfBT.md).
