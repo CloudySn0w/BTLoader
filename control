@@ -1,11 +1,11 @@
-Package: app.pyoncord
-Name: Bunny
-Version: 0.8.1
+Package: com.cloudysnow.btloader
+Name: BTLoader
+Version: 1.0.0
 Architecture: iphoneos-arm
 Description: A client modification for Discord's mobile app.
-Maintainer: Adrian Castro, Pylix
-Author: Adrian Castro, Pylix, FieryFlames
-Icon: https://avatars.githubusercontent.com/u/132727175
+Maintainer: CloudySn0w
+Author: CloudySn0w
+Icon: https://avatars.githubusercontent.com/u/186649748
 Section: Tweaks
 Depends: mobilesubstrate (>= 0.9.5000)
 Conflicts: app.enmity, mod.vendetta, app.unbound
