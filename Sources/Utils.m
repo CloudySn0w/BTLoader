@@ -246,7 +246,7 @@ void showBundleSelector(UIViewController *presenter) {
                                      preferredStyle:UIAlertControllerStyleAlert];
     [presenter presentViewController:loadingAlert animated:YES completion:nil];
 
-    NSURL *url = [NSURL URLWithString:@"https://api.github.com/repos/CloudySnowX/BoundTweak/branches"];
+    NSURL *url = [NSURL URLWithString:@"https://api.github.com/repos/CloudySn0w/BTLoader/branches"];
     NSURLSession *session = [NSURLSession
         sessionWithConfiguration:[NSURLSessionConfiguration defaultSessionConfiguration]];
 
@@ -324,7 +324,7 @@ static void showCommitsForBranch(NSString *branch, UIViewController *presenter,
 
     NSString *commitsUrl = [NSString
         stringWithFormat:
-            @"https://api.github.com/repos/CloudySnowX/BoundTweak/commits?sha=%@&per_page=10", branch];
+            @"https://api.github.com/repos/CloudySn0w/BTLoader/commits?sha=%@&per_page=10", branch];
     NSURL *commitsURL    = [NSURL URLWithString:commitsUrl];
 
     [[session
@@ -382,7 +382,7 @@ static void showCommitsForBranch(NSString *branch, UIViewController *presenter,
                                                                        NSString *bundleUrl =
                                                                            [NSString
                                                                                stringWithFormat:
-                                                                                   @"https://raw.githubusercontent.com/CloudySnowX/BoundTweak/%@/bundle.js",
+                                                                                   @"https://raw.githubusercontent.com/CloudySn0w/BTLoader/%@/bundle.js",
                                                                                    fullSha];
                                                                        NSURL *url = [NSURL
                                                                            URLWithString:bundleUrl];
