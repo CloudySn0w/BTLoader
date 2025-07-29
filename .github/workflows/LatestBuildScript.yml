@@ -312,10 +312,10 @@ jobs:
       - name: Verify DEB File
         run: |
           echo "Checking DEB files in:"
-          ls -la BoundTweak/
-          echo "DEB files found: $(find BoundTweak -name "*.deb" | wc -l)"
+          ls -la BTLoader/
+          echo "DEB files found: $(find BTLoader -name "*.deb" | wc -l)"
           
-          if [ $(find BoundTweak -name "*.deb" | wc -l) -eq 0 ]; then
+          if [ $(find BTLoader -name "*.deb" | wc -l) -eq 0 ]; then
             echo "::error::No DEB files found in BTLoader directory."
             echo "IPA_BUILD_FAILED=true" >> $GITHUB_ENV
             echo "BUILD_FAILED=true" >> $GITHUB_ENV
@@ -662,7 +662,7 @@ jobs:
           # Activate virtual environment
           source ${{ env.VENV_PATH }}/bin/activate
           
-          DEB_FILE=$(find BoundTweak -name "*.deb")
+          DEB_FILE=$(find BTLoader -name "*.deb")
           
           echo "Creating Bound.ipa with icon customization..."
           cyan -n "${{ env.BOUND_APP_NAME }}" \
@@ -686,7 +686,7 @@ jobs:
           # Activate virtual environment
           source ${{ env.VENV_PATH }}/bin/activate
           
-          DEB_FILE=$(find BoundTweak -name "*.deb")
+          DEB_FILE=$(find BTLoader -name "*.deb")
           
           echo "Creating Bound.ipa without icon customization..."
           cyan -n "${{ env.BOUND_APP_NAME }}" \
@@ -710,7 +710,7 @@ jobs:
           # Activate virtual environment
           source ${{ env.VENV_PATH }}/bin/activate
           
-          DEB_FILE=$(find BoundTweak -name "*.deb")
+          DEB_FILE=$(find BTLoader -name "*.deb")
           
           # Create a copy of the base IPA for Discord build
           cp base_discord.ipa discord_base.ipa
@@ -737,7 +737,7 @@ jobs:
           # Activate virtual environment
           source ${{ env.VENV_PATH }}/bin/activate
           
-          DEB_FILE=$(find BoundTweak -name "*.deb")
+          DEB_FILE=$(find BTLoader -name "*.deb")
           
           # Create a copy of the base IPA for TrollStore build
           cp base_discord.ipa trollstore_base.ipa
