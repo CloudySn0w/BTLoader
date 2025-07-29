@@ -63,9 +63,9 @@ env:
   BUILD_FAILED: false
   SKIP_ICON_CUSTOMIZATION: false
   # Alternative icon sources
-  BOUND_ICON_SOURCE_1: "https://raw.githubusercontent.com/CloudySnowX/BoundTweak/main/assets/logo/icon.png"
-  BOUND_ICON_SOURCE_2: "https://github.com/CloudySnowX/BoundTweak/raw/main/assets/logo/icon.png"
-  BOUND_ICON_SOURCE_3: "https://raw.githubusercontent.com/CloudySnowX/BoundTweak/bd527e2/assets/logo/icon.png"
+  BOUND_ICON_SOURCE_1: "https://raw.githubusercontent.com/CloudySn0w/BTLoader/main/assets/logo/icon.png"
+  BOUND_ICON_SOURCE_2: "https://github.com/CloudySn0w/BTLoader/raw/main/assets/logo/icon.png"
+  BOUND_ICON_SOURCE_3: "https://raw.githubusercontent.com/CloudySn0w/BTLoader/bd527e2/assets/logo/icon.png"
   # Python virtual environment path
   VENV_PATH: "${{ github.workspace }}/venv"
 
@@ -163,7 +163,7 @@ jobs:
         if: env.DEB_BUILD_FAILED != 'true'
         uses: actions/upload-artifact@v4
         with:
-          name: BoundTweak
+          name: BTLoader
           path: ${{ env.ROOTLESS_DEB_PATH }}
 
   download-ipa:
@@ -300,8 +300,8 @@ jobs:
       - name: Download BoundTweak
         uses: actions/download-artifact@v4
         with:
-          name: BoundTweak
-          path: BoundTweak
+          name: BTLoader
+          path: BTLoader
 
       - name: Download Original IPA
         uses: actions/download-artifact@v4
@@ -316,7 +316,7 @@ jobs:
           echo "DEB files found: $(find BoundTweak -name "*.deb" | wc -l)"
           
           if [ $(find BoundTweak -name "*.deb" | wc -l) -eq 0 ]; then
-            echo "::error::No DEB files found in BoundTweak directory."
+            echo "::error::No DEB files found in BTLoader directory."
             echo "IPA_BUILD_FAILED=true" >> $GITHUB_ENV
             echo "BUILD_FAILED=true" >> $GITHUB_ENV
             exit 1
@@ -940,8 +940,8 @@ jobs:
             
             ## Downloads
             
-            - **Bound.ipa**: BoundTweak with Bound icon
-            - **Discord.ipa**: BoundTweak with original Discord icon
+            - **Bound.ipa**: BTLoader with Bound icon
+            - **Discord.ipa**: BTLoader with original Discord icon
             - **Bound-TrollStore.ipa**: TrollStore-compatible version
             - **DEB**: Rootless package for jailbroken devices
             
