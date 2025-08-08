@@ -202,13 +202,7 @@ jobs:
           # If all sources fail, create a simple placeholder icon
           if [ ! -f bound_icon.png ] || [ "${{ steps.icon.outputs.icon_available }}" != "true" ]; then
             echo "Creating fallback icon..."
-            python3 -c "
-from PIL import Image, ImageDraw
-img = Image.new('RGB', (512, 512), color=(0, 120, 212))
-draw = ImageDraw.Draw(img)
-draw.ellipse((128, 128, 384, 384), fill=(255, 255, 255))
-img.save('bound_icon.png')
-            "
+            python3 -c "from PIL import Image, ImageDraw; img = Image.new('RGB', (512, 512), color=(0, 120, 212)); draw = ImageDraw.Draw(img); draw.ellipse((128, 128, 384, 384), fill=(255, 255, 255)); img.save('bound_icon.png')"
             echo "icon_available=true" >> $GITHUB_OUTPUT
           fi
 
