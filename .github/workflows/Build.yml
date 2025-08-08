@@ -122,8 +122,8 @@ jobs:
               FILE_ID="${BASH_REMATCH[1]}"
               echo "Extracted file ID: $FILE_ID"
               gdown "$FILE_ID" -O discord_original.ipa --no-cookies
-            elif [[ "$URL" =~ [?&]id=([^&]+) ]]; then
-              FILE_ID=$(echo "$URL" | sed -n 's/.*[?&]id=\([^&]*\).*/\1/p')
+            elif [[ "$URL" =~ [?\&]id=([^\&]+) ]]; then
+              FILE_ID=$(echo "$URL" | sed -n 's/.*[?\&]id=\([^\&]*\).*/\1/p')
               echo "Extracted file ID from query: $FILE_ID"
               gdown "$FILE_ID" -O discord_original.ipa --no-cookies
             else
