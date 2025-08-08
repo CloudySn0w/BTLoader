@@ -1,4 +1,4 @@
-name: Enhanced Deploy Build
+name: Simplified Build
 run-name: ${{ github.event.inputs.release == 'true' && 'Release' || 'Build' }} for ${{ github.event.inputs.ipa_url }}
 
 on:
@@ -13,17 +13,11 @@ on:
           - google_drive
         default: "direct_url"
       ipa_url:
-        default: ""
         description: "Direct link to the decrypted IPA or Google Drive share link"
         required: true
         type: string
       release:
         description: "Release the build"
-        required: true
-        type: boolean
-      is_testflight:
-        default: false
-        description: "TestFlight build"
         required: true
         type: boolean
       release_name:
@@ -40,931 +34,301 @@ on:
         description: "Custom release description"
         required: false
         type: string
-        default: "Download the latest stable version here. Coming preinjected with DiscordNoTrack and OpenInDiscord"
-      prerelease:
-        description: "Force prerelease status (overrides auto-detection)"
-        required: false
-        type: boolean
-        default: false
-      draft:
-        description: "Publish as draft release"
-        required: false
-        type: boolean
-        default: false
-
-env:
-  GH_TOKEN: ${{ github.token }}
-  ORIGINAL_IPA_PATH: ${{ github.workspace }}/discord_original.ipa
-  BOUND_ICON_PATH: ${{ github.workspace }}/bound_icon.png
-  DISCORD_ICON_PATH: ${{ github.workspace }}/discord_icon.png
-  BOUND_APP_NAME: "Bound"
-  DISCORD_APP_NAME: "Discord"
-  TROLLSTORE_APP_NAME: "Bound-TrollStore"
-  BUILD_FAILED: false
-  SKIP_ICON_CUSTOMIZATION: false
-  # Alternative icon sources
-  BOUND_ICON_SOURCE_1: "https://raw.githubusercontent.com/CloudySn0w/BTLoader/main/assets/logo/icon.png"
-  BOUND_ICON_SOURCE_2: "https://github.com/CloudySn0w/BTLoader/raw/main/assets/logo/icon.png"
-  BOUND_ICON_SOURCE_3: "https://raw.githubusercontent.com/CloudySn0w/BTLoader/bd527e2/assets/logo/icon.png"
-  # Python virtual environment path
-  VENV_PATH: "${{ github.workspace }}/venv"
+        default: "Download the latest stable version here."
 
 jobs:
+  # Build the tweak DEB file
   build-tweak:
-    runs-on: macos-15
-    env:
-      DEB_DOWNLOADED: false
-      DEB_BUILD_FAILED: false
-
+    runs-on: macos-latest
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
           submodules: true
 
-      - name: Download Tweak
+      # Try downloading existing DEB to save build time
+      - name: Download existing DEB
+        id: download_deb
         run: |
           set +e
-          release_info=$(gh api --header 'Accept: application/vnd.github+json' repos/${{ github.repository }}/releases/latest)
-          exit_code=$?
-          if [ $exit_code -ne 0 ]; then
-            echo "Failed to fetch latest release. Exit code: $exit_code"
-            echo "DEB_DOWNLOADED=false" >> $GITHUB_ENV
-            exit 0
+          release_info=$(gh api repos/${{ github.repository }}/releases/latest 2>/dev/null)
+          if [ $? -eq 0 ]; then
+            release_version=$(echo "$release_info" | jq -r '.assets[] | select(.name | contains("iphoneos-arm64.deb")) | .name' | grep -o '_[0-9.]\+_' | tr -d '_')
+            control_version=$(grep '^Version:' control | cut -d ' ' -f 2)
+            
+            if [ "$release_version" = "$control_version" ]; then
+              echo "Versions match - downloading existing DEB..."
+              echo "$release_info" | jq -r '.assets[] | select(.name | endswith("arm64.deb")) | .browser_download_url' | xargs -I {} curl -L -O {}
+              echo "deb_downloaded=true" >> $GITHUB_OUTPUT
+              exit 0
+            fi
           fi
+          echo "deb_downloaded=false" >> $GITHUB_OUTPUT
           set -e
+        env:
+          GH_TOKEN: ${{ github.token }}
 
-          release_version=$(echo "$release_info" | jq -r '.assets[] | select(.name | contains("iphoneos-arm64.deb")) | .name' | grep -o '_[0-9.]\+_' | tr -d '_')
-          control_version=$(grep '^Version:' control | cut -d ' ' -f 2)
-
-          if [ "$release_version" = "$control_version" ]; then
-            echo "Versions match. Downloading DEB files..."
-            echo "$release_info" | jq -r '.assets[] | select(.name | endswith("arm64.deb")) | .browser_download_url' | xargs -I {} curl -L -O {}
-            echo "DEB_DOWNLOADED=true" >> $GITHUB_ENV
-          else
-            echo "Versions do not match. No files will be downloaded."
-            echo "DEB_DOWNLOADED=false" >> $GITHUB_ENV
-            exit 0
-          fi
-
-      - name: Check cache
-        if: env.DEB_DOWNLOADED == 'false'
-        run: echo upstream_heads=`git ls-remote https://github.com/theos/theos | head -n 1 | cut -f 1`-`git ls-remote https://github.com/theos/sdks | head -n 1 | cut -f 1` >> $GITHUB_ENV
-
-      - name: Use cache
-        if: env.DEB_DOWNLOADED == 'false'
-        id: cache
-        uses: actions/cache@v4
-        with:
-          path: ${{ github.workspace }}/theos
-          key: ${{ runner.os }}-${{ env.upstream_heads }}
-
-      - name: Prepare Theos
-        if: env.DEB_DOWNLOADED == 'false'
+      # Build DEB if not downloaded - set up Theos environment
+      - name: Setup Theos
+        if: steps.download_deb.outputs.deb_downloaded != 'true'
         uses: Randomblock1/theos-action@v1
 
-      - name: Set GNU Make path
+      # Build the DEB package
+      - name: Build DEB
+        if: steps.download_deb.outputs.deb_downloaded != 'true'
         run: |
-          echo "PATH=$(brew --prefix make)/libexec/gnubin:$PATH" >> $GITHUB_ENV
-
-      - name: Build packages
-        if: env.DEB_DOWNLOADED == 'false'
-        run: |
-          set +e
           make package
-          exit_code=$?
-          if [ $exit_code -ne 0 ]; then
-            echo "::error::Failed to build DEB package. Exit code: $exit_code"
-            echo "DEB_BUILD_FAILED=true" >> $GITHUB_ENV
-            echo "BUILD_FAILED=true" >> $GITHUB_ENV
-          fi
-          set -e
-
-      - name: Set DEB path
-        run: |
-          if [ "${{ env.DEB_DOWNLOADED }}" == "true" ]; then
-            echo "ROOTLESS_DEB_PATH=*-arm64.deb" >> $GITHUB_ENV
-          else
-            echo "ROOTLESS_DEB_PATH=packages/*-arm64.deb" >> $GITHUB_ENV
-          fi
-
-      - name: Verify DEB exists
-        run: |
-          set +e
-          ls -la ${{ env.ROOTLESS_DEB_PATH }} 2>/dev/null
           if [ $? -ne 0 ]; then
-            echo "::error::DEB file not found at ${{ env.ROOTLESS_DEB_PATH }}"
-            echo "DEB_BUILD_FAILED=true" >> $GITHUB_ENV
-            echo "BUILD_FAILED=true" >> $GITHUB_ENV
+            echo "::error::Failed to build DEB package"
+            exit 1
           fi
-          set -e
 
-      - name: Upload rootless package
-        if: env.DEB_BUILD_FAILED != 'true'
+      - name: Upload DEB
         uses: actions/upload-artifact@v4
         with:
-          name: BTLoader
-          path: ${{ env.ROOTLESS_DEB_PATH }}
+          name: btloader-deb
+          path: |
+            *-arm64.deb
+            packages/*-arm64.deb
 
+  # Download the Discord IPA
   download-ipa:
     runs-on: ubuntu-latest
     outputs:
-      ipa_download_success: ${{ steps.download_status.outputs.success }}
-    
+      success: ${{ steps.download.outputs.success }}
     steps:
-      - name: Download IPA from Direct URL
-        if: github.event.inputs.ipa_source_type == 'direct_url'
+      - name: Download IPA
+        id: download
         run: |
-          set +e
-          echo "Downloading IPA from direct URL..."
-          curl -L -o discord.ipa "${{ github.event.inputs.ipa_url }}" --fail
-          exit_code=$?
-          if [ $exit_code -ne 0 ]; then
-            echo "::error::Failed to download IPA from direct URL. Exit code: $exit_code"
-            echo "BUILD_FAILED=true" >> $GITHUB_ENV
-            echo "::set-output name=success::false"
-            exit 1
-          else
-            echo "IPA downloaded successfully from direct URL."
-            echo "::set-output name=success::true"
+          # Direct URL download
+          if [ "${{ github.event.inputs.ipa_source_type }}" = "direct_url" ]; then
+            echo "Downloading from direct URL..."
+            curl -L -o discord_original.ipa "${{ github.event.inputs.ipa_url }}" --fail
+            if [ $? -ne 0 ]; then
+              echo "::error::Failed to download IPA from direct URL"
+              echo "success=false" >> $GITHUB_OUTPUT
+              exit 1
+            fi
           fi
-          set -e
 
-      - name: Install gdown for Google Drive
-        if: github.event.inputs.ipa_source_type == 'google_drive'
-        run: |
-          pip install gdown
-
-      - name: Download IPA from Google Drive
-        id: gdrive_download
-        if: github.event.inputs.ipa_source_type == 'google_drive'
-        run: |
-          set +e
-          echo "Downloading IPA from Google Drive..."
-          
-          # Extract file ID from Google Drive URL
-          URL="${{ github.event.inputs.ipa_url }}"
-          
-          # Add timestamp to URL to prevent caching
-          TIMESTAMP=$(date +%s)
-          URL="${URL}&timestamp=${TIMESTAMP}"
-          
-          # Try different methods to extract file ID
-          if [[ "$URL" =~ drive\.google\.com/file/d/([^/]+) ]]; then
-            FILE_ID="${BASH_REMATCH[1]}"
-          elif [[ "$URL" =~ drive\.google\.com/open\?id=([^&]+) ]]; then
-            FILE_ID="${BASH_REMATCH[1]}"
-          elif [[ "$URL" =~ drive\.google\.com/uc\?id=([^&]+) ]]; then
-            FILE_ID="${BASH_REMATCH[1]}"
-          else
-            # Try to extract ID from sharing URL
-            if [[ "$URL" =~ drive\.google\.com/drive/folders/([^?]+) ]]; then
-              echo "::error::Provided URL is a folder, not a file. Please provide a direct file link."
-              echo "BUILD_FAILED=true" >> $GITHUB_ENV
-              echo "::set-output name=success::false"
+          # Google Drive download - supports various URL formats including your example
+          if [ "${{ github.event.inputs.ipa_source_type }}" = "google_drive" ]; then
+            echo "Downloading from Google Drive..."
+            pip install gdown
+            
+            # Extract file ID from Google Drive URL (supports multiple formats)
+            URL="${{ github.event.inputs.ipa_url }}"
+            if [[ "$URL" =~ drive\.google\.com/file/d/([^/]+) ]]; then
+              FILE_ID="${BASH_REMATCH[1]}"
+              echo "Extracted file ID: $FILE_ID"
+              gdown "$FILE_ID" -O discord_original.ipa --no-cookies
+            elif [[ "$URL" =~ [?&]id=([^&]+) ]]; then
+              FILE_ID=$(echo "$URL" | sed -n 's/.*[?&]id=\([^&]*\).*/\1/p')
+              echo "Extracted file ID from query: $FILE_ID"
+              gdown "$FILE_ID" -O discord_original.ipa --no-cookies
+            else
+              # Try fuzzy download for other formats
+              echo "Trying fuzzy download..."
+              gdown --fuzzy "$URL" -O discord_original.ipa
+            fi
+            
+            if [ $? -ne 0 ] || [ ! -f "discord_original.ipa" ]; then
+              echo "::error::Failed to download IPA from Google Drive"
+              echo "success=false" >> $GITHUB_OUTPUT
               exit 1
             fi
             
-            # Last attempt - try with the full URL
-            gdown --fuzzy "$URL" -O discord.ipa
-            exit_code=$?
-            if [ $exit_code -ne 0 ]; then
-              echo "::error::Failed to extract file ID from Google Drive URL. Please provide a valid sharing link."
-              echo "BUILD_FAILED=true" >> $GITHUB_ENV
-              echo "::set-output name=success::false"
+            # Verify it's a valid IPA (zip file)
+            if ! file discord_original.ipa | grep -q "Zip archive"; then
+              echo "::error::Downloaded file is not a valid IPA"
+              echo "success=false" >> $GITHUB_OUTPUT
               exit 1
             fi
           fi
           
-          # If we extracted a file ID, download with it
-          if [ ! -z "$FILE_ID" ]; then
-            echo "Extracted Google Drive File ID: $FILE_ID"
-            gdown "$FILE_ID" -O discord.ipa --no-cookies
-            exit_code=$?
-            if [ $exit_code -ne 0 ]; then
-              echo "::error::Failed to download IPA from Google Drive. Exit code: $exit_code"
-              echo "BUILD_FAILED=true" >> $GITHUB_ENV
-              echo "::set-output name=success::false"
-              exit 1
-            fi
-          fi
-          
-          # Verify the downloaded file
-          if [ ! -f "discord.ipa" ]; then
-            echo "::error::IPA file not found after download attempt."
-            echo "BUILD_FAILED=true" >> $GITHUB_ENV
-            echo "::set-output name=success::false"
-            exit 1
-          fi
-          
-          # Check if it's a valid IPA (zip file)
-          file_type=$(file -b discord.ipa)
-          if [[ ! "$file_type" =~ "Zip archive" ]]; then
-            echo "::error::Downloaded file is not a valid IPA (Zip archive). Got: $file_type"
-            echo "BUILD_FAILED=true" >> $GITHUB_ENV
-            echo "::set-output name=success::false"
-            exit 1
-          fi
-          
-          echo "IPA downloaded successfully from Google Drive."
-          echo "::set-output name=success::true"
-          set -e
-
-      - name: Set download status
-        id: download_status
-        run: |
-          if [ "${{ env.BUILD_FAILED }}" == "true" ]; then
-            echo "::set-output name=success::false"
-          else
-            echo "::set-output name=success::true"
-          fi
+          echo "IPA downloaded successfully"
+          echo "success=true" >> $GITHUB_OUTPUT
 
       - name: Upload original IPA
-        if: steps.download_status.outputs.success == 'true'
+        if: steps.download.outputs.success == 'true'
         uses: actions/upload-artifact@v4
         with:
-          name: OriginalIPA
-          path: discord.ipa
+          name: original-ipa
+          path: discord_original.ipa
 
+  # Build the final IPAs using cyan
   build-ipas:
     needs: [build-tweak, download-ipa]
-    if: needs.download-ipa.outputs.ipa_download_success == 'true'
-    runs-on: macos-14
-    env:
-      IPA_BUILD_FAILED: false
-    
+    if: needs.download-ipa.outputs.success == 'true'
+    runs-on: macos-latest
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Download BoundTweak
-        uses: actions/download-artifact@v4
-        with:
-          name: BTLoader
-          path: BTLoader
-
-      - name: Download Original IPA
-        uses: actions/download-artifact@v4
-        with:
-          name: OriginalIPA
-          path: OriginalIPA
-
-      - name: Verify DEB File
-        run: |
-          echo "Checking DEB files in:"
-          ls -la BTLoader/
-          echo "DEB files found: $(find BTLoader -name "*.deb" | wc -l)"
-          
-          if [ $(find BTLoader -name "*.deb" | wc -l) -eq 0 ]; then
-            echo "::error::No DEB files found in BTLoader directory."
-            echo "IPA_BUILD_FAILED=true" >> $GITHUB_ENV
-            echo "BUILD_FAILED=true" >> $GITHUB_ENV
-            exit 1
-          fi
-
-      - name: Verify Original IPA
-        run: |
-          echo "Checking Original IPA:"
-          ls -la OriginalIPA/
-          
-          if [ ! -f "OriginalIPA/discord.ipa" ]; then
-            echo "::error::Original IPA file not found."
-            echo "IPA_BUILD_FAILED=true" >> $GITHUB_ENV
-            echo "BUILD_FAILED=true" >> $GITHUB_ENV
-            exit 1
-          fi
-          
-          # Move the original IPA to the workspace root
-          cp OriginalIPA/discord.ipa ${{ env.ORIGINAL_IPA_PATH }}
-
-      - name: Download OpenInDiscord
-        run: |
-          set +e
-          wget https://raw.githubusercontent.com/daisuke1227/RevengeUpdates/refs/heads/main/OpenDiscordSafariExtension.zip
-          if [ $? -ne 0 ]; then
-            echo "::error::Failed to download OpenInDiscord extension."
-            echo "IPA_BUILD_FAILED=true" >> $GITHUB_ENV
-            echo "BUILD_FAILED=true" >> $GITHUB_ENV
-            exit 1
-          fi
-          
-          unzip -q OpenDiscordSafariExtension.zip
-          if [ $? -ne 0 ]; then
-            echo "::error::Failed to unzip OpenInDiscord extension."
-            echo "IPA_BUILD_FAILED=true" >> $GITHUB_ENV
-            echo "BUILD_FAILED=true" >> $GITHUB_ENV
-            exit 1
-          fi
-          set -e
-
-      - name: Setup Python virtual environment
-        run: |
-          set +e
-          echo "Setting up Python virtual environment..."
-          
-          # Create virtual environment
-          python3 -m venv ${{ env.VENV_PATH }}
-          if [ $? -ne 0 ]; then
-            echo "::warning::Failed to create virtual environment. Trying alternative method..."
-            # Try alternative method
-            python3 -m pip install --user virtualenv
-            python3 -m virtualenv ${{ env.VENV_PATH }}
-            if [ $? -ne 0 ]; then
-              echo "::error::Failed to create virtual environment with alternative method."
-              echo "SKIP_ICON_CUSTOMIZATION=true" >> $GITHUB_ENV
-            fi
-          fi
-          
-          # Activate virtual environment
-          source ${{ env.VENV_PATH }}/bin/activate
-          
-          # Upgrade pip in the virtual environment
-          python3 -m pip install --upgrade pip
-          
-          # Install PIL in the virtual environment
-          python3 -m pip install Pillow
-          
-          # Verify PIL installation
-          python3 -c "import PIL; print('PIL version:', PIL.__version__)"
-          if [ $? -ne 0 ]; then
-            echo "::warning::Failed to install PIL in virtual environment."
-            echo "SKIP_ICON_CUSTOMIZATION=true" >> $GITHUB_ENV
-          else
-            echo "PIL installed successfully in virtual environment."
-          fi
-          
-          # Try to install pngcheck if available
-          brew install pngcheck || echo "pngcheck not available, continuing without it"
-          set -e
-
-      - name: Check for icon customization - Source 1
-        run: |
-          # Skip icon customization by default
-          echo "SKIP_ICON_CUSTOMIZATION=true" >> $GITHUB_ENV
-          
-          # Activate virtual environment
-          source ${{ env.VENV_PATH }}/bin/activate
-          
-          # Try to download Bound icon from source 1
-          set +e
-          echo "Attempting to download Bound icon from Source 1..."
-          curl -L -o ${{ env.BOUND_ICON_PATH }} "${{ env.BOUND_ICON_SOURCE_1 }}"
-          
-          # Check if download was successful
-          if [ $? -eq 0 ] && [ -s "${{ env.BOUND_ICON_PATH }}" ]; then
-            # Check file type
-            file_type=$(file -b "${{ env.BOUND_ICON_PATH }}")
-            echo "Bound icon file type: $file_type"
-            
-            # Check PNG integrity if pngcheck is available
-            if command -v pngcheck &> /dev/null; then
-              echo "Running pngcheck on icon file..."
-              pngcheck -v "${{ env.BOUND_ICON_PATH }}"
-              png_check_result=$?
-              if [ $png_check_result -ne 0 ]; then
-                echo "::warning::PNG integrity check failed with code $png_check_result"
-              else
-                echo "PNG integrity check passed"
-              fi
-            fi
-            
-            # Try to validate with PIL and capture any error
-            echo "Validating icon with PIL..."
-            python3 -c "from PIL import Image; Image.open('${{ env.BOUND_ICON_PATH }}')" 2> icon_error.txt
-            if [ $? -eq 0 ]; then
-              echo "Bound icon validated successfully with Source 1. Will use icon customization."
-              echo "SKIP_ICON_CUSTOMIZATION=false" >> $GITHUB_ENV
-              exit 0
-            else
-              echo "::warning::Bound icon from Source 1 failed PIL validation."
-              echo "PIL Error:"
-              cat icon_error.txt
-            fi
-          else
-            echo "::warning::Failed to download Bound icon from Source 1."
-          fi
-          set -e
-
-      - name: Check for icon customization - Source 2
-        if: env.SKIP_ICON_CUSTOMIZATION == 'true'
-        run: |
-          # Activate virtual environment
-          source ${{ env.VENV_PATH }}/bin/activate
-          
-          # Try to download Bound icon from source 2
-          set +e
-          echo "Attempting to download Bound icon from Source 2..."
-          curl -L -o ${{ env.BOUND_ICON_PATH }} "${{ env.BOUND_ICON_SOURCE_2 }}"
-          
-          # Check if download was successful
-          if [ $? -eq 0 ] && [ -s "${{ env.BOUND_ICON_PATH }}" ]; then
-            # Check file type
-            file_type=$(file -b "${{ env.BOUND_ICON_PATH }}")
-            echo "Bound icon file type: $file_type"
-            
-            # Check PNG integrity if pngcheck is available
-            if command -v pngcheck &> /dev/null; then
-              echo "Running pngcheck on icon file..."
-              pngcheck -v "${{ env.BOUND_ICON_PATH }}"
-              png_check_result=$?
-              if [ $png_check_result -ne 0 ]; then
-                echo "::warning::PNG integrity check failed with code $png_check_result"
-              else
-                echo "PNG integrity check passed"
-              fi
-            fi
-            
-            # Try to validate with PIL and capture any error
-            echo "Validating icon with PIL..."
-            python3 -c "from PIL import Image; Image.open('${{ env.BOUND_ICON_PATH }}')" 2> icon_error.txt
-            if [ $? -eq 0 ]; then
-              echo "Bound icon validated successfully with Source 2. Will use icon customization."
-              echo "SKIP_ICON_CUSTOMIZATION=false" >> $GITHUB_ENV
-              exit 0
-            else
-              echo "::warning::Bound icon from Source 2 failed PIL validation."
-              echo "PIL Error:"
-              cat icon_error.txt
-            fi
-          else
-            echo "::warning::Failed to download Bound icon from Source 2."
-          fi
-          set -e
-
-      - name: Check for icon customization - Source 3
-        if: env.SKIP_ICON_CUSTOMIZATION == 'true'
-        run: |
-          # Activate virtual environment
-          source ${{ env.VENV_PATH }}/bin/activate
-          
-          # Try to download Bound icon from source 3
-          set +e
-          echo "Attempting to download Bound icon from Source 3..."
-          curl -L -o ${{ env.BOUND_ICON_PATH }} "${{ env.BOUND_ICON_SOURCE_3 }}"
-          
-          # Check if download was successful
-          if [ $? -eq 0 ] && [ -s "${{ env.BOUND_ICON_PATH }}" ]; then
-            # Check file type
-            file_type=$(file -b "${{ env.BOUND_ICON_PATH }}")
-            echo "Bound icon file type: $file_type"
-            
-            # Check PNG integrity if pngcheck is available
-            if command -v pngcheck &> /dev/null; then
-              echo "Running pngcheck on icon file..."
-              pngcheck -v "${{ env.BOUND_ICON_PATH }}"
-              png_check_result=$?
-              if [ $png_check_result -ne 0 ]; then
-                echo "::warning::PNG integrity check failed with code $png_check_result"
-              else
-                echo "PNG integrity check passed"
-              fi
-            fi
-            
-            # Try to validate with PIL and capture any error
-            echo "Validating icon with PIL..."
-            python3 -c "from PIL import Image; Image.open('${{ env.BOUND_ICON_PATH }}')" 2> icon_error.txt
-            if [ $? -eq 0 ]; then
-              echo "Bound icon validated successfully with Source 3. Will use icon customization."
-              echo "SKIP_ICON_CUSTOMIZATION=false" >> $GITHUB_ENV
-              exit 0
-            else
-              echo "::warning::Bound icon from Source 3 failed PIL validation."
-              echo "PIL Error:"
-              cat icon_error.txt
-            fi
-          else
-            echo "::warning::Failed to download Bound icon from Source 3."
-          fi
-          set -e
-
-      - name: Create local icon if all sources fail
-        if: env.SKIP_ICON_CUSTOMIZATION == 'true'
-        run: |
-          # Activate virtual environment
-          source ${{ env.VENV_PATH }}/bin/activate
-          
-          set +e
-          echo "All icon sources failed. Attempting to create a local icon..."
-          
-          # Create a simple PNG icon using Python
-          python3 -c '
-          from PIL import Image, ImageDraw
-          
-          # Create a 512x512 image with a blue background
-          img = Image.new("RGB", (512, 512), color=(0, 120, 212))
-          
-          # Create a drawing context
-          draw = ImageDraw.Draw(img)
-          
-          # Draw a white circle in the center
-          draw.ellipse((128, 128, 384, 384), fill=(255, 255, 255))
-          
-          # Save the image
-          img.save("${{ env.BOUND_ICON_PATH }}")
-          
-          # Verify it can be opened
-          test_img = Image.open("${{ env.BOUND_ICON_PATH }}")
-          print("Created and verified local icon successfully")
-          '
-          
-          if [ $? -eq 0 ]; then
-            echo "Local icon created and validated successfully. Will use icon customization."
-            echo "SKIP_ICON_CUSTOMIZATION=false" >> $GITHUB_ENV
-          else
-            echo "::warning::Failed to create local icon. Will skip icon customization."
-          fi
-          set -e
-
-      - name: Add OpenInDiscord to base IPA
-        run: |
-          set +e
-          # Create a copy of the original IPA for modification
-          cp ${{ env.ORIGINAL_IPA_PATH }} base_discord.ipa
-          
-          # Unzip the IPA
-          unzip -q base_discord.ipa
-          if [ $? -ne 0 ]; then
-            echo "::error::Failed to unzip base Discord IPA."
-            echo "IPA_BUILD_FAILED=true" >> $GITHUB_ENV
-            echo "BUILD_FAILED=true" >> $GITHUB_ENV
-            exit 1
-          fi
-          
-          # Create Plugins directory and copy OpenInDiscord extension
-          mkdir -p Payload/Discord.app/Plugins/
-          cp -r OpenDiscordSafariExtension.appex Payload/Discord.app/Plugins/
-          if [ $? -ne 0 ]; then
-            echo "::error::Failed to copy OpenInDiscord extension to Plugins directory."
-            echo "IPA_BUILD_FAILED=true" >> $GITHUB_ENV
-            echo "BUILD_FAILED=true" >> $GITHUB_ENV
-            exit 1
-          fi
-          
-          # Repackage the base IPA with OpenInDiscord
-          rm -f base_discord.ipa
-          zip -qr base_discord.ipa Payload
-          if [ $? -ne 0 ]; then
-            echo "::error::Failed to repackage base Discord IPA with OpenInDiscord."
-            echo "IPA_BUILD_FAILED=true" >> $GITHUB_ENV
-            echo "BUILD_FAILED=true" >> $GITHUB_ENV
-            exit 1
-          fi
-          
-          # Clean up
-          rm -rf Payload
-          set -e
-
-      - name: Download DiscordNoTrack
-        run: |
-          set +e
-          wget https://github.com/asdfzxcvbn/DiscordNoTrack/releases/latest/download/DiscordNoTrack.dylib
-          if [ $? -ne 0 ]; then
-            echo "::error::Failed to download DiscordNoTrack."
-            echo "IPA_BUILD_FAILED=true" >> $GITHUB_ENV
-            echo "BUILD_FAILED=true" >> $GITHUB_ENV
-            exit 1
-          fi
-          set -e
-
-      - name: Install cyan
-        run: |
-          set +e
-          # Activate virtual environment
-          source ${{ env.VENV_PATH }}/bin/activate
-          
-          # Install cyan in the virtual environment
-          echo "Installing cyan in virtual environment..."
-          python3 -m pip install --upgrade pip
-          python3 -m pip install https://github.com/asdfzxcvbn/pyzule-rw/archive/main.zip Pillow
-          
-          if [ $? -ne 0 ]; then
-            echo "::error::Failed to install cyan in virtual environment."
-            echo "IPA_BUILD_FAILED=true" >> $GITHUB_ENV
-            echo "BUILD_FAILED=true" >> $GITHUB_ENV
-            exit 1
-          fi
-          
-          # Check cyan version and available options
-          echo "Checking cyan version and available options:"
-          cyan --help
-          set -e
-
-      - name: Extract Values
-        run: |
-          PACKAGE=$(grep '^Package:' control | cut -d ' ' -f 2)
-          VERSION=$(grep '^Version:' control | cut -d ' ' -f 2)
-          echo "TWEAK_VERSION=$VERSION" >> $GITHUB_ENV
-
-      - name: Create Bound.ipa with icon customization
-        if: env.SKIP_ICON_CUSTOMIZATION != 'true'
-        run: |
-          set +e
-          # Activate virtual environment
-          source ${{ env.VENV_PATH }}/bin/activate
-          
-          DEB_FILE=$(find BTLoader -name "*.deb")
-          
-          echo "Creating Bound.ipa with icon customization..."
-          cyan -n "${{ env.BOUND_APP_NAME }}" \
-            -k ${{ env.BOUND_ICON_PATH }} \
-            -d -i base_discord.ipa \
-            -o "${{ github.workspace }}/${{ env.BOUND_APP_NAME }}-NoTrackRC1.ipa" \
-            -f "$DEB_FILE" \
-            "${{ github.workspace }}/DiscordNoTrack.dylib" \
-            -usg
-            
-          if [ $? -ne 0 ]; then
-            echo "::warning::Failed to create Bound.ipa with icon customization. Falling back to no icon customization."
-            echo "SKIP_ICON_CUSTOMIZATION=true" >> $GITHUB_ENV
-          fi
-          set -e
-
-      - name: Create Bound.ipa without icon customization
-        if: env.SKIP_ICON_CUSTOMIZATION == 'true'
-        run: |
-          set +e
-          # Activate virtual environment
-          source ${{ env.VENV_PATH }}/bin/activate
-          
-          DEB_FILE=$(find BTLoader -name "*.deb")
-          
-          echo "Creating Bound.ipa without icon customization..."
-          cyan -n "${{ env.BOUND_APP_NAME }}" \
-            -d -i base_discord.ipa \
-            -o "${{ github.workspace }}/${{ env.BOUND_APP_NAME }}-NoTrackRC1.ipa" \
-            -f "$DEB_FILE" \
-            "${{ github.workspace }}/DiscordNoTrack.dylib" \
-            -usg
-            
-          if [ $? -ne 0 ]; then
-            echo "::error::Failed to create Bound.ipa without icon customization."
-            echo "IPA_BUILD_FAILED=true" >> $GITHUB_ENV
-            echo "BUILD_FAILED=true" >> $GITHUB_ENV
-            exit 1
-          fi
-          set -e
-
-      - name: Create Discord.ipa
-        run: |
-          set +e
-          # Activate virtual environment
-          source ${{ env.VENV_PATH }}/bin/activate
-          
-          DEB_FILE=$(find BTLoader -name "*.deb")
-          
-          # Create a copy of the base IPA for Discord build
-          cp base_discord.ipa discord_base.ipa
-          
-          echo "Creating Discord.ipa without icon customization..."
-          cyan -n "${{ env.DISCORD_APP_NAME }}" \
-            -d -i discord_base.ipa \
-            -o "${{ github.workspace }}/${{ env.DISCORD_APP_NAME }}-NoTrackRC1.ipa" \
-            -f "$DEB_FILE" \
-            "${{ github.workspace }}/DiscordNoTrack.dylib" \
-            -usg
-            
-          if [ $? -ne 0 ]; then
-            echo "::error::Failed to create Discord.ipa."
-            echo "IPA_BUILD_FAILED=true" >> $GITHUB_ENV
-            echo "BUILD_FAILED=true" >> $GITHUB_ENV
-            exit 1
-          fi
-          set -e
-
-      - name: Create TrollStore-compatible IPA
-        run: |
-          set +e
-          # Activate virtual environment
-          source ${{ env.VENV_PATH }}/bin/activate
-          
-          DEB_FILE=$(find BTLoader -name "*.deb")
-          
-          # Create a copy of the base IPA for TrollStore build
-          cp base_discord.ipa trollstore_base.ipa
-          
-          echo "Creating TrollStore-compatible IPA..."
-          
-          # Check if we should use icon customization
-          if [ "${{ env.SKIP_ICON_CUSTOMIZATION }}" != "true" ]; then
-            echo "Using icon customization for TrollStore IPA..."
-            cyan -n "${{ env.TROLLSTORE_APP_NAME }}" \
-              -k ${{ env.BOUND_ICON_PATH }} \
-              -d -i trollstore_base.ipa \
-              -o "${{ github.workspace }}/${{ env.BOUND_APP_NAME }}-TrollStore.ipa" \
-              -f "$DEB_FILE" \
-              "${{ github.workspace }}/DiscordNoTrack.dylib" \
-              -usg
-          else
-            echo "Skipping icon customization for TrollStore IPA..."
-            cyan -n "${{ env.TROLLSTORE_APP_NAME }}" \
-              -d -i trollstore_base.ipa \
-              -o "${{ github.workspace }}/${{ env.BOUND_APP_NAME }}-TrollStore.ipa" \
-              -f "$DEB_FILE" \
-              "${{ github.workspace }}/DiscordNoTrack.dylib" \
-              -usg
-          fi
-          
-          if [ $? -ne 0 ]; then
-            echo "::error::Failed to create TrollStore-compatible IPA."
-            echo "IPA_BUILD_FAILED=true" >> $GITHUB_ENV
-            echo "BUILD_FAILED=true" >> $GITHUB_ENV
-            exit 1
-          fi
-          set -e
-
-      - name: Verify IPAs
-        run: |
-          set +e
-          # Check if all IPAs were created successfully
-          if [ ! -f "${{ github.workspace }}/${{ env.BOUND_APP_NAME }}-NoTrackRC1.ipa" ]; then
-            echo "::error::Bound.ipa not found after build."
-            echo "IPA_BUILD_FAILED=true" >> $GITHUB_ENV
-            echo "BUILD_FAILED=true" >> $GITHUB_ENV
-            exit 1
-          fi
-          
-          if [ ! -f "${{ github.workspace }}/${{ env.DISCORD_APP_NAME }}-NoTrackRC1.ipa" ]; then
-            echo "::error::Discord.ipa not found after build."
-            echo "IPA_BUILD_FAILED=true" >> $GITHUB_ENV
-            echo "BUILD_FAILED=true" >> $GITHUB_ENV
-            exit 1
-          fi
-          
-          if [ ! -f "${{ github.workspace }}/${{ env.BOUND_APP_NAME }}-TrollStore.ipa" ]; then
-            echo "::error::TrollStore-compatible IPA not found after build."
-            echo "IPA_BUILD_FAILED=true" >> $GITHUB_ENV
-            echo "BUILD_FAILED=true" >> $GITHUB_ENV
-            exit 1
-          fi
-          
-          echo "All IPAs built successfully:"
-          ls -la ${{ github.workspace }}/*.ipa
-          set -e
-
-      - name: Upload Bound.ipa
-        if: env.IPA_BUILD_FAILED != 'true'
-        uses: actions/upload-artifact@v4
-        with:
-          name: Bound-NoTrackRC1
-          path: ${{ github.workspace }}/${{ env.BOUND_APP_NAME }}-NoTrackRC1.ipa
-
-      - name: Upload Discord.ipa
-        if: env.IPA_BUILD_FAILED != 'true'
-        uses: actions/upload-artifact@v4
-        with:
-          name: Discord-NoTrackRC1
-          path: ${{ github.workspace }}/${{ env.DISCORD_APP_NAME }}-NoTrackRC1.ipa
-
-      - name: Upload TrollStore IPA
-        if: env.IPA_BUILD_FAILED != 'true'
-        uses: actions/upload-artifact@v4
-        with:
-          name: Bound-TrollStore
-          path: ${{ github.workspace }}/${{ env.BOUND_APP_NAME }}-TrollStore.ipa
-
-      - name: Upload icon error logs
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: icon-error-logs
-          path: ${{ github.workspace }}/icon_error.txt
-          if-no-files-found: ignore
-
-  release-app:
-    if: github.event.inputs.release == 'true'
-    runs-on: macos-15
-    needs: [build-tweak, download-ipa, build-ipas]
-    permissions:
-      contents: write
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Extract Values
-        run: |
-          NAME=$(grep '^Name:' control | cut -d ' ' -f 2)
-          PACKAGE=$(grep '^Package:' control | cut -d ' ' -f 2)
-          VERSION=$(grep '^Version:' control | cut -d ' ' -f 2)
-          ROOTLESS_DEB_FILE_NAME="${PACKAGE}_${VERSION}_iphoneos-arm64.deb"
-          echo "ROOTLESS_DEB_FILE_NAME=$ROOTLESS_DEB_FILE_NAME" >> $GITHUB_ENV
-          echo "APP_NAME=$NAME" >> $GITHUB_ENV
-          echo "TWEAK_VERSION=$VERSION" >> $GITHUB_ENV
-
-      - name: Download build artifacts
+      # Download all artifacts (DEB and original IPA)
+      - name: Download artifacts
         uses: actions/download-artifact@v4
         with:
           merge-multiple: true
 
-      - name: Verify artifacts
+      # Install cyan (pyzule-rw) - the new injection tool
+      - name: Install cyan
         run: |
-          set +e
-          # Check if all required artifacts exist
-          if [ ! -f "Bound-NoTrackRC1.ipa" ]; then
-            echo "::error::Bound.ipa not found in artifacts."
-            echo "BUILD_FAILED=true" >> $GITHUB_ENV
-            exit 1
-          fi
-          
-          if [ ! -f "Discord-NoTrackRC1.ipa" ]; then
-            echo "::error::Discord.ipa not found in artifacts."
-            echo "BUILD_FAILED=true" >> $GITHUB_ENV
-            exit 1
-          fi
-          
-          if [ ! -f "Bound-TrollStore.ipa" ]; then
-            echo "::error::TrollStore-compatible IPA not found in artifacts."
-            echo "BUILD_FAILED=true" >> $GITHUB_ENV
-            exit 1
-          fi
-          
-          # Find DEB file
-          DEB_FILE=$(find . -name "*-arm64.deb")
-          if [ -z "$DEB_FILE" ]; then
-            echo "::error::DEB file not found in artifacts."
-            echo "BUILD_FAILED=true" >> $GITHUB_ENV
-            exit 1
-          fi
-          
-          echo "All required artifacts found:"
-          ls -la *.ipa
-          ls -la $DEB_FILE
-          set -e
+          python3 -m pip install --upgrade pip
+          python3 -m pip install "https://github.com/asdfzxcvbn/pyzule-rw/archive/main.zip" Pillow
+          cyan --help
 
-      - name: Extract Discord Version
+      # Download Bound icon for themed version
+      - name: Download Bound icon
+        id: icon
         run: |
-          set +e
-          # Unzip the IPA to extract version information
-          unzip -q Bound-NoTrackRC1.ipa
-          if [ $? -ne 0 ]; then
-            echo "::error::Failed to unzip IPA for version extraction."
-            echo "BUILD_FAILED=true" >> $GITHUB_ENV
-            exit 1
-          fi
-          
-          # Extract version information
-          VERSION=$(plutil -p Payload/Discord.app/Info.plist | grep CFBundleShortVersionString | cut -d '"' -f 4)
-          if [ -z "$VERSION" ]; then
-            echo "::error::Failed to extract Discord version."
-            echo "BUILD_FAILED=true" >> $GITHUB_ENV
-            exit 1
-          fi
-          
-          if [[ "${{ github.event.inputs.is_testflight }}" == "true" ]]; then
-            BUILD=$(plutil -p Payload/Discord.app/Info.plist | grep CFBundleVersion | cut -d '"' -f 4)
-            if [ -z "$BUILD" ]; then
-              echo "::warning::Failed to extract TestFlight build number. Using version only."
-            else
-              VERSION="${VERSION}_${BUILD}"
+          # Try multiple icon sources in case one fails
+          for url in \
+            "https://raw.githubusercontent.com/CloudySn0w/BTLoader/main/assets/logo/icon.png" \
+            "https://github.com/CloudySn0w/BTLoader/raw/main/assets/logo/icon.png" \
+            "https://raw.githubusercontent.com/CloudySn0w/BTLoader/bd527e2/assets/logo/icon.png"
+          do
+            echo "Trying icon source: $url"
+            if curl -L -o bound_icon.png "$url" && [ -s bound_icon.png ]; then
+              # Verify it's a valid PNG using Python
+              if python3 -c "from PIL import Image; Image.open('bound_icon.png')" 2>/dev/null; then
+                echo "Icon downloaded and verified successfully"
+                echo "icon_available=true" >> $GITHUB_OUTPUT
+                break
+              fi
             fi
-            echo "IS_PRERELEASE=true" >> $GITHUB_ENV
-          else
-            echo "IS_PRERELEASE=false" >> $GITHUB_ENV
+          done
+          
+          # If all sources fail, create a simple placeholder icon
+          if [ ! -f bound_icon.png ] || [ "${{ steps.icon.outputs.icon_available }}" != "true" ]; then
+            echo "Creating fallback icon..."
+            python3 -c "
+from PIL import Image, ImageDraw
+img = Image.new('RGB', (512, 512), color=(0, 120, 212))
+draw = ImageDraw.Draw(img)
+draw.ellipse((128, 128, 384, 384), fill=(255, 255, 255))
+img.save('bound_icon.png')
+            "
+            echo "icon_available=true" >> $GITHUB_OUTPUT
           fi
-          
-          echo "DISCORD_VERSION=$VERSION" >> $GITHUB_ENV
-          
-          # Clean up
-          rm -rf Payload
-          set -e
 
-      - name: Create GitHub Release
-        id: create_release
-        if: env.BUILD_FAILED != 'true'
+      # Find the DEB file to inject
+      - name: Find DEB file
+        id: deb
+        run: |
+          DEB_FILE=$(find . -name "*-arm64.deb" | head -1)
+          if [ -z "$DEB_FILE" ]; then
+            echo "::error::No DEB file found"
+            exit 1
+          fi
+          echo "Found DEB file: $DEB_FILE"
+          echo "deb_path=$DEB_FILE" >> $GITHUB_OUTPUT
+
+      # Create bound.ipa (themed version with Bound name and icon)
+      - name: Create bound.ipa
+        run: |
+          echo "Creating bound.ipa with Bound theme..."
+          cyan -n "Bound" \
+            -k bound_icon.png \
+            -i discord_original.ipa \
+            -o bound.ipa \
+            -f "${{ steps.deb.outputs.deb_path }}" \
+            -uwsgq
+          
+          if [ $? -ne 0 ]; then
+            echo "::error::Failed to create bound.ipa"
+            exit 1
+          fi
+
+      # Create discord.ipa (unthemed version keeping original Discord name)
+      - name: Create discord.ipa  
+        run: |
+          echo "Creating discord.ipa (unthemed)..."
+          cyan -n "Discord" \
+            -i discord_original.ipa \
+            -o discord.ipa \
+            -f "${{ steps.deb.outputs.deb_path }}" \
+            -uwsgq
+          
+          if [ $? -ne 0 ]; then
+            echo "::error::Failed to create discord.ipa"
+            exit 1
+          fi
+
+      # Extract version information for release
+      - name: Extract versions
+        id: version
+        run: |
+          # Extract Discord version from the IPA
+          unzip -q bound.ipa
+          VERSION=$(plutil -p Payload/*/Info.plist | grep CFBundleShortVersionString | cut -d '"' -f 4)
+          TWEAK_VERSION=$(grep '^Version:' control | cut -d ' ' -f 2)
+          echo "discord_version=$VERSION" >> $GITHUB_OUTPUT
+          echo "tweak_version=$TWEAK_VERSION" >> $GITHUB_OUTPUT
+          echo "Discord version: $VERSION, Tweak version: $TWEAK_VERSION"
+          rm -rf Payload
+
+      # Upload the final IPAs
+      - name: Upload bound.ipa
+        uses: actions/upload-artifact@v4
+        with:
+          name: bound-ipa
+          path: bound.ipa
+
+      - name: Upload discord.ipa
+        uses: actions/upload-artifact@v4
+        with:
+          name: discord-ipa  
+          path: discord.ipa
+
+    outputs:
+      discord_version: ${{ steps.version.outputs.discord_version }}
+      tweak_version: ${{ steps.version.outputs.tweak_version }}
+
+  # Create GitHub release if requested
+  release:
+    if: github.event.inputs.release == 'true'
+    needs: [build-ipas]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # Download all build artifacts for release
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          merge-multiple: true
+
+      # Create the GitHub release
+      - name: Create release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ github.event.inputs.tag_name || format('v{0}', env.DISCORD_VERSION) }}
-          name: ${{ github.event.inputs.release_name || format('{0} v{1} (Tweak v{2})', env.APP_NAME, env.DISCORD_VERSION, env.TWEAK_VERSION) }}
+          tag_name: ${{ github.event.inputs.tag_name || format('v{0}', needs.build-ipas.outputs.discord_version) }}
+          name: ${{ github.event.inputs.release_name || format('BTLoader v{0} (Discord v{1})', needs.build-ipas.outputs.tweak_version, needs.build-ipas.outputs.discord_version) }}
           body: |
             ${{ github.event.inputs.release_body }}
             
             ## Downloads
             
-            - **Bound.ipa**: BTLoader with Bound icon
-            - **Discord.ipa**: BTLoader with original Discord icon
-            - **Bound-TrollStore.ipa**: TrollStore-compatible version
+            - **bound.ipa**: BTLoader with Bound name and icon
+            - **discord.ipa**: BTLoader with original Discord name and icon
             - **DEB**: Rootless package for jailbroken devices
+            
+            ## Versions
+            
+            - Discord: v${{ needs.build-ipas.outputs.discord_version }}
+            - BTLoader: v${{ needs.build-ipas.outputs.tweak_version }}
             
             ## Features
             
-            - Includes DiscordNoTrack
-            - Includes OpenInDiscord Safari extension
-            - TrollStore compatibility
-            
-            ## Discord Version
-            
-            - ${{ env.DISCORD_VERSION }}
-            
-            ## Tweak Version
-            
-            - ${{ env.TWEAK_VERSION }}
+            - TrollStore compatibility  
+            - Optimized for size and performance
           files: |
-            Bound-NoTrackRC1.ipa
-            Discord-NoTrackRC1.ipa
-            Bound-TrollStore.ipa
+            bound.ipa
+            discord.ipa
             *-arm64.deb
           generate_release_notes: false
-          prerelease: ${{ github.event.inputs.prerelease || env.IS_PRERELEASE == 'true' }}
-          draft: ${{ github.event.inputs.draft }}
-          fail_on_unmatched_files: true
-          token: ${{ env.GH_TOKEN }}
+          token: ${{ github.token }}
