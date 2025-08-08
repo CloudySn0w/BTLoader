@@ -174,9 +174,17 @@ jobs:
       # Install cyan (pyzule-rw) - the new injection tool
       - name: Install cyan
         run: |
+          python3 -m venv venv
+          source venv/bin/activate
           python3 -m pip install --upgrade pip
           python3 -m pip install "https://github.com/asdfzxcvbn/pyzule-rw/archive/main.zip" Pillow
+          
+          # Verify installation
           cyan --help
+          
+          # Make venv available for subsequent steps
+          echo "VIRTUAL_ENV=$PWD/venv" >> $GITHUB_ENV
+          echo "$PWD/venv/bin" >> $GITHUB_PATH
 
       # Download Bound icon for themed version
       - name: Download Bound icon
