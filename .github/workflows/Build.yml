@@ -16,6 +16,14 @@ on:
         description: "Direct link to the decrypted IPA or Google Drive share link"
         required: true
         type: string
+      icon_choice:
+        description: "Icon to use for bound.ipa"
+        required: true
+        type: choice
+        options:
+          - bound_icon
+          - fallback_icon
+        default: "bound_icon"
       release:
         description: "Release the build"
         required: true
@@ -190,29 +198,36 @@ jobs:
       - name: Download Bound icon
         id: icon
         run: |
-          # Try multiple icon sources in case one fails
-          for url in \
-            "https://raw.githubusercontent.com/CloudySn0w/BTLoader/main/assets/logo/icon.png" \
-            "https://github.com/CloudySn0w/BTLoader/raw/main/assets/logo/icon.png" \
-            "https://raw.githubusercontent.com/CloudySn0w/BTLoader/bd527e2/assets/logo/icon.png"
-          do
-            echo "Trying icon source: $url"
-            if curl -L -o bound_icon.png "$url" && [ -s bound_icon.png ]; then
-              # Verify it's a valid PNG using Python
-              if python3 -c "from PIL import Image; Image.open('bound_icon.png')" 2>/dev/null; then
-                echo "Icon downloaded and verified successfully"
-                echo "icon_available=true" >> $GITHUB_OUTPUT
-                break
-              fi
-            fi
-          done
+          icon_downloaded=false
           
-          # If all sources fail, create a simple placeholder icon
-          if [ ! -f bound_icon.png ] || [ "${{ steps.icon.outputs.icon_available }}" != "true" ]; then
+          # Only try to download if user chose bound_icon
+          if [ "${{ github.event.inputs.icon_choice }}" = "bound_icon" ]; then
+            # Try multiple icon sources in case one fails
+            for url in \
+              "https://raw.githubusercontent.com/CloudySn0w/BTLoader/main/assets/logo/icon.png" \
+              "https://github.com/CloudySn0w/BTLoader/raw/main/assets/logo/icon.png" \
+              "https://raw.githubusercontent.com/CloudySn0w/BTLoader/bd527e2/assets/logo/icon.png"
+            do
+              echo "Trying icon source: $url"
+              if curl -L -o bound_icon.png "$url" && [ -s bound_icon.png ]; then
+                # Verify it's a valid PNG using Python
+                if python3 -c "from PIL import Image; Image.open('bound_icon.png')" 2>/dev/null; then
+                  echo "Icon downloaded and verified successfully"
+                  icon_downloaded=true
+                  break
+                fi
+              fi
+            done
+          fi
+          
+          # Create fallback icon if download failed OR user chose fallback_icon
+          if [ "$icon_downloaded" = "false" ] || [ "${{ github.event.inputs.icon_choice }}" = "fallback_icon" ]; then
             echo "Creating fallback icon..."
             python3 -c "from PIL import Image, ImageDraw; img = Image.new('RGB', (512, 512), color=(0, 120, 212)); draw = ImageDraw.Draw(img); draw.ellipse((128, 128, 384, 384), fill=(255, 255, 255)); img.save('bound_icon.png')"
-            echo "icon_available=true" >> $GITHUB_OUTPUT
+            icon_downloaded=true
           fi
+          
+          echo "icon_available=$icon_downloaded" >> $GITHUB_OUTPUT
 
       # Find the DEB file to inject
       - name: Find DEB file
@@ -226,10 +241,11 @@ jobs:
           echo "Found DEB file: $DEB_FILE"
           echo "deb_path=$DEB_FILE" >> $GITHUB_OUTPUT
 
-      # Create bound.ipa (themed version with Bound name and icon)
+      # Create bound.ipa (themed version with Bound name and chosen icon)
       - name: Create bound.ipa
         run: |
-          echo "Creating bound.ipa with Bound theme..."
+          icon_type="${{ github.event.inputs.icon_choice }}"
+          echo "Creating bound.ipa with Bound theme using $icon_type..."
           cyan -n "Bound" \
             -k bound_icon.png \
             -i discord_original.ipa \
