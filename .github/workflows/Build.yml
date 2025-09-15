@@ -347,6 +347,6 @@ jobs:
           files: |
             bound.ipa
             discord.ipa
-            *-arm64.deb
+            **/*-arm64.deb
           generate_release_notes: false
           token: ${{ github.token }}
