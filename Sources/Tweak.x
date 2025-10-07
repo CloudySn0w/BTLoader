@@ -65,7 +65,7 @@ id                    gBridge        = nil;
     else
     {
         bundleUrl = [NSURL
-            URLWithString:@"https://github.com/revenge-mod/revenge-bundle/releases/latest/download/revenge.min.js"];
+            URLWithString:@"https://codeberg.org/cocobo1/Kettu/raw/branch/dist/kettu.min.js"];
         BTLoaderLog(@"Using default bundle URL: %@", bundleUrl.absoluteString);
     }
 
