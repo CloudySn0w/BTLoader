@@ -4,6 +4,11 @@ run-name: ${{ github.event.inputs.release == 'true' && 'Release' || 'Build' }} f
 on:
   workflow_dispatch:
     inputs:
+      use_cached_builds:
+        description: "Use cached DEB if available (uncheck to force rebuild)"
+        required: true
+        type: boolean
+        default: true
       ipa_source_type:
         description: "Source type for IPA file"
         required: true
@@ -57,6 +62,7 @@ jobs:
       # Try downloading existing DEB to save build time
       - name: Download existing DEB
         id: download_deb
+        if: inputs.use_cached_builds == true
         run: |
           set +e
           release_info=$(gh api repos/${{ github.repository }}/releases/latest 2>/dev/null)
