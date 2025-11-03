@@ -85,32 +85,70 @@ id                    gBridge        = nil;
 
     NSURLSession *session = [NSURLSession
         sessionWithConfiguration:[NSURLSessionConfiguration defaultSessionConfiguration]];
+    __block BOOL downloadSuccessful = NO;
+
     [[session
         dataTaskWithRequest:bundleRequest
-          completionHandler:^(NSData *data, NSURLResponse *response, NSError *error) {
-              if ([response isKindOfClass:[NSHTTPURLResponse class]])
-              {
-                  NSHTTPURLResponse *httpResponse = (NSHTTPURLResponse *) response;
-                  if (httpResponse.statusCode == 200)
-                  {
-                      bundle = data;
-                      [bundle
-                          writeToURL:[pyoncordDirectory URLByAppendingPathComponent:@"bundle.js"]
-                          atomically:YES];
+        completionHandler:^(NSData *data, NSURLResponse *response, NSError *error) {
+            if ([response isKindOfClass:[NSHTTPURLResponse class]])
+            {
+                NSHTTPURLResponse *httpResponse = (NSHTTPURLResponse *) response;
+                if (httpResponse.statusCode == 200 && data && data.length > 0)
+                {
+                    bundle = data;
+                    downloadSuccessful = YES;
+                    [bundle
+                        writeToURL:[pyoncordDirectory URLByAppendingPathComponent:@"bundle.js"]
+                        atomically:YES];
 
-                      NSString *etag = [httpResponse.allHeaderFields objectForKey:@"Etag"];
-                      if (etag)
-                      {
-                          [etag
-                              writeToURL:[pyoncordDirectory URLByAppendingPathComponent:@"etag.txt"]
-                              atomically:YES
+                    NSString *etag = [httpResponse.allHeaderFields objectForKey:@"Etag"];
+                    if (etag)
+                    {
+                        [etag
+                            writeToURL:[pyoncordDirectory URLByAppendingPathComponent:@"etag.txt"]
+                            atomically:YES
                                 encoding:NSUTF8StringEncoding
-                                   error:nil];
-                      }
-                  }
-              }
-              dispatch_group_leave(group);
-          }] resume];
+                                error:nil];
+                    }
+
+                    BTLoaderLog(@"Bundle download successful, cleaning up backup");
+                    cleanupBundleBackup();
+                }
+                else if (httpResponse.statusCode == 304)
+                {
+                    BTLoaderLog(@"Bundle not modified (304), cleaning up backup");
+                    downloadSuccessful = YES;
+                    cleanupBundleBackup();
+                }
+                else
+                {
+                    BTLoaderLog(@"Bundle download failed with status: %ld", (long)httpResponse.statusCode);
+                }
+            }
+            else if (error)
+            {
+                BTLoaderLog(@"Bundle download error: %@", error.localizedDescription);
+            }
+
+            if (!downloadSuccessful && !bundle)
+            {
+                BTLoaderLog(@"No bundle available, attempting to restore from backup");
+                if (restoreBundleFromBackup())
+                {
+                    bundle = [NSData dataWithContentsOfURL:[pyoncordDirectory URLByAppendingPathComponent:@"bundle.js"]];
+                    if (bundle)
+                    {
+                        BTLoaderLog(@"Successfully restored bundle from backup");
+                    }
+                }
+                else
+                {
+                    BTLoaderLog(@"Failed to restore bundle from backup");
+                }
+            }
+
+            dispatch_group_leave(group);
+        }] resume];
 
     dispatch_group_wait(group, DISPATCH_TIME_FOREVER);
 
@@ -173,6 +211,14 @@ id                    gBridge        = nil;
         BTLoaderLog(@"Executing JS bundle");
         %orig(bundle, source, async);
     }
+    else
+    {
+        BTLoaderLog(@"ERROR: No bundle available to execute!");
+        showErrorAlert(@"Bundle Error",
+                    @"Failed to load bundle. Please check your internet connection and restart the app.",
+                    nil);
+    }
+
 
     NSURL *preloadsDirectory = [pyoncordDirectory URLByAppendingPathComponent:@"preloads"];
     if ([[NSFileManager defaultManager] fileExistsAtPath:preloadsDirectory.path])
