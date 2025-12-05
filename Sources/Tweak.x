@@ -293,6 +293,8 @@ id                    gBridge        = nil;
 
         NSString *install_prefix = @"/var/jb";
         isJailbroken             = [[NSFileManager defaultManager] fileExistsAtPath:install_prefix];
+        BOOL jbPathExists = [[NSFileManager defaultManager] fileExistsAtPath:install_prefix];
+
 
         NSString *bundlePath =
             [NSString stringWithFormat:@"%@/Library/Application Support/BTLoaderResources.bundle",
@@ -311,17 +313,57 @@ id                    gBridge        = nil;
             [[NSFileManager defaultManager] fileExistsAtPath:btloaderPatchesBundlePath];
         BTLoaderLog(@"Bundle exists at path: %d", bundleExists);
 
-        NSError *error = nil;
-        NSArray *bundleContents =
-            [[NSFileManager defaultManager] contentsOfDirectoryAtPath:btloaderPatchesBundlePath
-                                                                error:&error];
-        if (error)
+        if (jbPathExists)
         {
-            BTLoaderLog(@"Error listing bundle contents: %@", error);
+            BTLoaderLog(@"Jailbreak path exists, attempting to load bundle from: %@", bundlePath);
+
+            BOOL bundleExists = [[NSFileManager defaultManager] fileExistsAtPath:bundlePath];
+            NSBundle *testBundle = [NSBundle bundleWithPath:bundlePath];
+
+            if (bundleExists && testBundle)
+            {
+                btloaderPatchesBundlePath = bundlePath;
+                BTLoaderLog(@"Successfully loaded bundle from jailbroken path");
+            }
+            else
+            {
+                BTLoaderLog(@"Bundle not found or invalid at jailbroken path, falling back to jailed");
+                btloaderPatchesBundlePath = jailedPath;
+            }
         }
         else
         {
-            BTLoaderLog(@"Bundle contents: %@", bundleContents);
+            BTLoaderLog(@"Not jailbroken, using jailed bundle path");
+            btloaderPatchesBundlePath = jailedPath;
+        }
+
+        BTLoaderLog(@"Selected bundle path: %@", btloaderPatchesBundlePath);
+
+        NSBundle *btloaderPatchesBundle = [NSBundle bundleWithPath:btloaderPatchesBundlePath];
+        if (!btloaderPatchesBundle)
+        {
+            BTLoaderLog(@"Failed to load btoaderTweakPatches bundle from any path");
+            BTLoaderLog(@"  Jailbroken path: %@", bundlePath);
+            BTLoaderLog(@"  Jailed path: %@", jailedPath);
+            BTLoaderLog(@"  /var/jb exists: %d", jbPathExists);
+
+            btloaderPatchesBundlePath = nil;
+        }
+        else
+        {
+            BTLoaderLog(@"Bundle loaded successfully");
+            NSError *error = nil;
+            NSArray *bundleContents =
+                [[NSFileManager defaultManager] contentsOfDirectoryAtPath:btloaderPatchesBundlePath
+                                                                    error:&error];
+            if (error)
+            {
+                BTLoaderLog(@"Error listing bundle contents: %@", error);
+            }
+            else
+            {
+                BTLoaderLog(@"Bundle contents: %@", bundleContents);
+            }
         }
 
         pyoncordDirectory = getPyoncordDirectory();
